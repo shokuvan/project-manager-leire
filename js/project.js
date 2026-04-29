@@ -339,16 +339,68 @@ window.removeItem = (id) => {
 };
 
 // Update realisasi end otomatis saat realisasi start diubah
+// + cascade ke item lain di aktivitas & aktivitas berikutnya dalam segmen yang sama
 window.updRealisasiStart = (id, val) => {
   const it = proj.items.find(i => i.id === id);
   if (!it) return;
+
+  const shift = it.realisasiStart && val ? diffDays(it.realisasiStart, val) : 0;
   it.realisasiStart = val;
   it.realisasiEnd   = val ? addDays(val, it.dur - 1) : '';
-  // Update field di DOM
+
+  // Update DOM item ini
   const endEl = document.getElementById(`real-end-${id}`);
   if (endEl) endEl.textContent = it.realisasiEnd ? fmtDate(it.realisasiEnd) : '—';
+
+  // Cascade: geser semua item di aktivitas yang sama (kecuali item ini sendiri)
+  // dan aktivitas berikutnya dalam segmen yang sama
+  if (shift !== 0 && val) {
+    const act = proj.activities.find(a => a.id === it.actId);
+    if (act) {
+      const seg = proj.segments.find(s => s.id === act.segId);
+      if (seg) {
+        // Urutan aktivitas dalam segmen ini
+        const segActs = proj.activities.filter(a => a.segId === seg.id);
+        const actIdx  = segActs.findIndex(a => a.id === act.id);
+
+        // Aktivitas yang kena cascade: aktivitas saat ini + aktivitas sesudahnya
+        const affectedActIds = segActs.slice(actIdx).map(a => a.id);
+
+        proj.items.forEach(other => {
+          if (other.id === it.id) return; // skip item yang diubah
+          if (!affectedActIds.includes(other.actId)) return; // skip aktivitas sebelumnya
+          if (!other.realisasiStart) return; // skip yang belum ada realisasinya
+
+          other.realisasiStart = addDays(other.realisasiStart, shift);
+          other.realisasiEnd   = addDays(other.realisasiStart, other.dur - 1);
+
+          // Update DOM
+          const otherStartEl = document.getElementById(`real-start-input-${other.id}`);
+          if (otherStartEl) otherStartEl.value = other.realisasiStart;
+          const otherEndEl = document.getElementById(`real-end-${other.id}`);
+          if (otherEndEl) otherEndEl.textContent = fmtDate(other.realisasiEnd);
+          const otherBadgeEl = document.getElementById(`late-badge-${other.id}`);
+          if (otherBadgeEl) otherBadgeEl.innerHTML = lateBadgeHtml(other);
+        });
+      }
+    }
+  }
+
+  // Update badge keterlambatan item ini
+  const badgeEl = document.getElementById(`late-badge-${id}`);
+  if (badgeEl) badgeEl.innerHTML = lateBadgeHtml(it);
+
   saveProj();
 };
+
+// Helper: generate HTML badge keterlambatan
+function lateBadgeHtml(it) {
+  const late = it.realisasiStart && it.planStart ? diffDays(it.planStart, it.realisasiStart) : null;
+  if (late === null) return '<span style="color:var(--muted);font-size:11px">—</span>';
+  if (late > 0) return `<span class="late-badge">+${late} hr terlambat</span>`;
+  if (late < 0) return `<span class="early-badge">${Math.abs(late)} hr lebih awal</span>`;
+  return '<span style="color:var(--green);font-size:11px">✅ Tepat waktu</span>';
+}
 
 // Update planEnd otomatis saat durasi diubah (dari tabel)
 window.updDur = (id, val) => {
@@ -411,10 +463,10 @@ function renderItemsTable() {
               <td><input type="number" value="${it.dur}" min="1" style="width:60px"
                 onchange="updDur(${it.id},this.value)"></td>
               <td class="mono" id="plan-end-${it.id}">${fmtDate(it.planEnd)}</td>
-              <td><input type="date" value="${it.realisasiStart||''}" style="width:150px"
+              <td><input type="date" id="real-start-input-${it.id}" value="${it.realisasiStart||''}" style="width:150px"
                 onchange="updRealisasiStart(${it.id},this.value)"></td>
               <td class="mono" id="real-end-${it.id}">${it.realisasiEnd ? fmtDate(it.realisasiEnd) : '—'}</td>
-              <td>${lateLabel}</td>
+              <td id="late-badge-${it.id}">${lateLabel}</td>
               <td><button class="btn btn-danger" onclick="removeItem(${it.id})">✕</button></td>
             </tr>`;
           }).join('')}
@@ -525,22 +577,23 @@ function renderGantt() {
             if (inReal) realClass = isLate ? 'gantt-cell-late' : 'gantt-cell-ontime';
           }
 
+          // Selalu position:relative agar overlay tidak overflow
+          const tdStyle = 'padding:0;position:relative;height:28px;';
           if (inPlan && realClass) {
-            // Overlap: tampilkan real di atas plan (plan lebih transparan)
-            return `<td style="padding:0;position:relative;height:28px">
+            return `<td style="${tdStyle}">
               <div class="gantt-cell-plan${isFirst?' gantt-cell-first':''}${isLast?' gantt-cell-last':''}" style="background:${HEX[si%6]}40;border-top:2px solid ${HEX[si%6]};border-bottom:2px solid ${HEX[si%6]};${isFirst?`border-left:2px solid ${HEX[si%6]}`:''}${isLast?`;border-right:2px solid ${HEX[si%6]}`:''}"></div>
               <div class="gantt-cell-overlay ${realClass}"></div>
             </td>`;
           } else if (inPlan) {
-            return `<td style="padding:0;height:28px">
+            return `<td style="${tdStyle}">
               <div class="gantt-cell-plan${isFirst?' gantt-cell-first':''}${isLast?' gantt-cell-last':''}" style="background:${HEX[si%6]}40;border-top:2px solid ${HEX[si%6]};border-bottom:2px solid ${HEX[si%6]};${isFirst?`border-left:2px solid ${HEX[si%6]}`:''}${isLast?`;border-right:2px solid ${HEX[si%6]}`:''}"></div>
             </td>`;
           } else if (realClass) {
-            return `<td style="padding:0;height:28px">
+            return `<td style="${tdStyle}">
               <div class="gantt-cell-overlay ${realClass}"></div>
             </td>`;
           }
-          return `<td style="padding:0;height:28px"></td>`;
+          return `<td style="${tdStyle}"></td>`;
         }).join('');
 
         // Hitung % realisasi
@@ -772,7 +825,7 @@ function renderRealisasi() {
               <div class="sub-label" style="margin-top:0">Realisasi Satuan</div>
               <div style="display:flex;gap:6px;align-items:center">
                 <input type="number" value="${it.realisasiQty||0}" min="0" onchange="updRealQty(${it.id},this.value)" style="width:100px">
-                <span class="mono" style="color:var(--muted);font-size:12px">${it.planUnit||'m²'}</span>
+                <span class="mono" style="color:var(--muted);font-size:12px" id="real-unit-label-${it.id}">${it.planUnit||'m²'}</span>
               </div>
             </div>
             <div>
@@ -813,6 +866,9 @@ window.updPlanQty  = (id, v) => {
 window.updPlanUnit = (id, v) => {
   const it = proj.items.find(i=>i.id===id);
   it.planUnit = v;
+  // Update label satuan di sebelah input realisasi langsung (tanpa refresh)
+  const unitLabel = document.getElementById(`real-unit-label-${id}`);
+  if (unitLabel) unitLabel.textContent = v;
   saveProj();
 };
 window.updRealQty  = (id, v) => {

@@ -315,14 +315,20 @@ tr:hover td { background: rgba(59,130,246,0.03); }
 .gantt-table th { font-size:10px; font-weight:600; color:var(--muted); padding:4px 2px; border-bottom:1px solid var(--border); text-align:center; min-width:28px; }
 .gantt-label { font-size:12px; padding:5px 10px; white-space:nowrap; min-width:180px; max-width:200px; overflow:hidden; text-overflow:ellipsis; }
 .gantt-cell-plan {
-  position: absolute; inset: 2px 0;
+  position: absolute;
+  top: 3px; bottom: 3px; left: 0; right: 0;
   border-radius: 3px;
+  pointer-events: none;
 }
-.gantt-cell-first { border-radius: 4px 0 0 4px; }
-.gantt-cell-last  { border-radius: 0 4px 4px 0; }
+.gantt-cell-first { border-radius: 4px 0 0 4px !important; }
+.gantt-cell-last  { border-radius: 0 4px 4px 0 !important; }
 .gantt-cell-overlay {
-  position: absolute; inset: 4px 0;
-  border-radius: 3px; opacity: 0.85;
+  position: absolute;
+  top: 5px; bottom: 5px; left: 0; right: 0;
+  border-radius: 3px;
+  opacity: 0.85;
+  pointer-events: none;
+  overflow: hidden;
 }
 .gantt-cell-ontime { background: var(--green); }
 .gantt-cell-late   { background: var(--red); }
