@@ -83,11 +83,11 @@ requireAuth(async (user) => {
 
   // Load data proyek
   const snap = await getDoc(doc(db, 'projects', projId));
-  if (!snap.exists() || snap.data().uid !== user.uid) {
-    alert('Proyek tidak ditemukan atau bukan milikmu.');
-    window.location.href = '/dashboard.html';
-    return;
-  }
+  if (!snap.exists()) {
+   alert('Proyek tidak ditemukan.');
+   window.location.href = '/dashboard.html';
+   return;
+}
 
   proj = { id: snap.id, ...snap.data() };
   proj.segments = proj.segments || [];
