@@ -7,7 +7,7 @@ import { requireAuth, logout } from "./auth.js";
 import {
   collection, doc,
   addDoc, getDocs, deleteDoc, query,
-  where, orderBy, serverTimestamp
+  orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // ─── Helpers ───────────────────────────────────────────────────
@@ -56,7 +56,6 @@ async function loadProjects() {
   try {
     const q = query(
       collection(db, 'projects'),
-      where('uid', '==', currentUser.uid),
       orderBy('createdAt', 'desc')
     );
     const snap = await getDocs(q);
@@ -82,7 +81,7 @@ function renderProjects(projects) {
     const avgProg  = items ? Math.round((p.items||[]).reduce((a,i) => a + (i.progressActual||0), 0) / items) : 0;
     return `
     <div class="proj-card" onclick="goToProject('${p.id}')">
-      <button class="proj-card-del" onclick="event.stopPropagation(); confirmDelete('${p.id}', this)" title="Hapus proyek">✕</button>
+      ${p.uid === currentUser.uid ? `<button class="proj-card-del" onclick="event.stopPropagation(); confirmDelete('${p.id}', this)" title="Hapus proyek">✕</button>` : ''}
       <div class="proj-card-name">${p.name || 'Tanpa Nama'}</div>
       <div class="proj-card-meta">${fmtDate(p.startDate)} · Dibuat ${fmtDate(p.createdAt)}</div>
       <div class="proj-card-stats">
@@ -106,14 +105,6 @@ window.goToProject = (id) => {
 // ─── Hapus proyek ──────────────────────────────────────────────
 window.confirmDelete = async (id, btn) => {
   if (!confirm('Hapus proyek ini? Semua data akan hilang permanen.')) return;
-
-  // Cek kepemilikan sebelum hapus
-  const snap = await getDocs(query(collection(db, 'projects'), where('__name__', '==', id)));
-  if (!snap.empty && snap.docs[0].data().uid !== currentUser.uid) {
-    toast('Kamu tidak berhak menghapus proyek ini.', 'error');
-    return;
-  }
-
   btn.textContent = '...';
   try {
     await deleteDoc(doc(db, 'projects', id));
