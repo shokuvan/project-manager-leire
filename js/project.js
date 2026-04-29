@@ -560,15 +560,9 @@ function renderGantt() {
         const planStartIdx = diffDays(minDate, it.planStart);
         const planSpan     = it.dur;
 
-        const late = it.realisasiStart && it.planStart ? diffDays(it.planStart, it.realisasiStart) : 0;
-        const isLate = late > 0;
-        const onTime = it.realisasiStart && !isLate;
-
         // Cells untuk gantt
         const cells = dates.map((dt, idx) => {
           const inPlan = idx >= planStartIdx && idx < planStartIdx + planSpan;
-          const isFirst = idx === planStartIdx;
-          const isLast  = idx === planStartIdx + planSpan - 1;
 
           let realClass = '';
           if (it.realisasiStart) {
@@ -577,21 +571,35 @@ function renderGantt() {
             if (inReal) realClass = isLate ? 'gantt-cell-late' : 'gantt-cell-ontime';
           }
 
-          // Selalu position:relative agar overlay tidak overflow
+          // Posisi realisasi
           const tdStyle = 'padding:0;position:relative;height:28px;';
-          if (inPlan && realClass) {
-            return `<td style="${tdStyle}">
-              <div class="gantt-cell-plan${isFirst?' gantt-cell-first':''}${isLast?' gantt-cell-last':''}" style="background:${HEX[si%6]}40;border-top:2px solid ${HEX[si%6]};border-bottom:2px solid ${HEX[si%6]};${isFirst?`border-left:2px solid ${HEX[si%6]}`:''}${isLast?`;border-right:2px solid ${HEX[si%6]}`:''}"></div>
-              <div class="gantt-cell-overlay ${realClass}"></div>
-            </td>`;
-          } else if (inPlan) {
-            return `<td style="${tdStyle}">
-              <div class="gantt-cell-plan${isFirst?' gantt-cell-first':''}${isLast?' gantt-cell-last':''}" style="background:${HEX[si%6]}40;border-top:2px solid ${HEX[si%6]};border-bottom:2px solid ${HEX[si%6]};${isFirst?`border-left:2px solid ${HEX[si%6]}`:''}${isLast?`;border-right:2px solid ${HEX[si%6]}`:''}"></div>
-            </td>`;
-          } else if (realClass) {
-            return `<td style="${tdStyle}">
-              <div class="gantt-cell-overlay ${realClass}"></div>
-            </td>`;
+
+          let inReal = false;
+          let realStartIdx = -1;
+          if (it.realisasiStart) {
+            realStartIdx = diffDays(minDate, it.realisasiStart);
+            inReal = idx >= realStartIdx && idx < realStartIdx + it.dur;
+          }
+
+          // Apakah sel ini melewati planEnd?
+          const planEndIdx = planStartIdx + planSpan - 1;
+          const isOverdue = inReal && idx > planEndIdx; // hari realisasi yang melebihi rencana
+
+          const cellBg = inPlan
+            ? `background:${HEX[si%6]}40;border-top:2px solid ${HEX[si%6]};border-bottom:2px solid ${HEX[si%6]};${idx===planStartIdx?`border-left:2px solid ${HEX[si%6]}`:''}${idx===planEndIdx?`;border-right:2px solid ${HEX[si%6]}`:''}` 
+            : '';
+
+          const planDiv = inPlan
+            ? `<div class="gantt-cell-plan" style="${cellBg}"></div>`
+            : '';
+
+          // Hijau = realisasi dalam rentang rencana, Merah = realisasi melewati rencana
+          const realDiv = inReal
+            ? `<div class="gantt-cell-overlay ${isOverdue ? 'gantt-cell-late' : 'gantt-cell-ontime'}"></div>`
+            : '';
+
+          if (planDiv || realDiv) {
+            return `<td style="${tdStyle}">${planDiv}${realDiv}</td>`;
           }
           return `<td style="${tdStyle}"></td>`;
         }).join('');
