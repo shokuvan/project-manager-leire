@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PEM & REM — Proyek</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <a href="/dashboard.html" class="logo">PEM <span>&</span> REM <small>Project Manager</small></a>
+  <div class="header-right">
+    <div class="proj-label">Proyek: <span id="header-proj-name">—</span></div>
+    <span id="save-indicator" style="font-size:12px;color:var(--muted)"></span>
+    <a href="/dashboard.html" class="btn btn-back">← Semua Proyek</a>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs-bar">
+  <button class="tab active" onclick="switchTab('setup',this)">⚙️ Setup</button>
+  <button class="tab" onclick="switchTab('gantt',this)">📅 Gantt</button>
+  <button class="tab" onclick="switchTab('cost',this)">💰 Biaya</button>
+  <button class="tab" onclick="switchTab('realisasi',this)">📊 Realisasi</button>
+  <button class="tab" onclick="switchTab('deviasi',this)">📈 Deviasi</button>
+</div>
+
+<!-- ══ TAB: SETUP ══════════════════════════════════════════════ -->
+<div id="page-setup" class="page active">
+<div class="container">
+  <div class="kpi-grid" style="margin-top:0">
+    <div class="kpi"><div class="kpi-label">Segmen</div><div class="kpi-value blue" id="kpi-seg">0</div></div>
+    <div class="kpi"><div class="kpi-label">Item Pekerjaan</div><div class="kpi-value blue" id="kpi-item">0</div></div>
+    <div class="kpi"><div class="kpi-label">Total Durasi</div><div class="kpi-value yellow" id="kpi-dur">0 hari</div></div>
+    <div class="kpi"><div class="kpi-label">Tgl Mulai</div><div class="kpi-value" id="kpi-start" style="font-size:14px">—</div></div>
+    <div class="kpi"><div class="kpi-label">Est. Selesai</div><div class="kpi-value green" id="kpi-end" style="font-size:14px">—</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🏗️ Info Proyek</div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label>Nama Proyek</label>
+        <input type="text" id="proj-name" placeholder="Nama proyek...">
+      </div>
+      <div class="form-group">
+        <label>Tanggal Mulai</label>
+        <input type="date" id="proj-start">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🗂️ Segmen <span class="badge" id="seg-count-badge">0</span></div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label>Nama Segmen</label>
+        <input type="text" id="new-seg-name" placeholder="Segmen A, Divisi 1..." onkeydown="if(event.key==='Enter') addSegment()">
+      </div>
+      <div class="form-group"><label>&nbsp;</label><button class="btn btn-primary" onclick="addSegment()">+ Tambah</button></div>
+    </div>
+    <div id="segment-list"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📋 Item Pekerjaan <span class="badge" id="item-count-badge">0</span></div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Segmen</label>
+        <select id="new-item-seg"><option value="">-- Pilih --</option></select>
+      </div>
+      <div class="form-group" style="flex:2">
+        <label>Nama Item</label>
+        <input type="text" id="new-item-name" placeholder="Pekerjaan Galian..." onkeydown="if(event.key==='Enter') addItem()">
+      </div>
+      <div class="form-group" style="min-width:90px">
+        <label>Durasi (hari)</label>
+        <input type="number" id="new-item-dur" min="1" value="1">
+      </div>
+      <div class="form-group" style="min-width:100px">
+        <label>Mulai Hari ke-</label>
+        <input type="number" id="new-item-start" min="1" value="1">
+      </div>
+      <div class="form-group"><label>&nbsp;</label><button class="btn btn-success" onclick="addItem()">+ Tambah</button></div>
+    </div>
+    <div id="items-table-wrap">
+      <div class="empty"><div class="empty-icon">📋</div>Belum ada item.</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ TAB: GANTT ══════════════════════════════════════════════ -->
+<div id="page-gantt" class="page">
+<div class="container">
+  <div class="card">
+    <div class="card-title">📅 Gantt Chart</div>
+    <div id="gantt-container"><div class="empty"><div class="empty-icon">📅</div>Belum ada data.</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ══ TAB: BIAYA ══════════════════════════════════════════════ -->
+<div id="page-cost" class="page">
+<div class="container">
+  <div class="kpi-grid" style="margin-top:0">
+    <div class="kpi"><div class="kpi-label">Total Rencana</div><div class="kpi-value blue" id="kpi-total-cost">Rp 0</div></div>
+    <div class="kpi"><div class="kpi-label">Biaya Tenaga</div><div class="kpi-value" id="kpi-tenaga-cost" style="font-size:16px">Rp 0</div></div>
+    <div class="kpi"><div class="kpi-label">Biaya Material</div><div class="kpi-value" id="kpi-material-cost" style="font-size:16px">Rp 0</div></div>
+  </div>
+  <div id="cost-sections"><div class="empty"><div class="empty-icon">💰</div>Belum ada item.</div></div>
+</div>
+</div>
+
+<!-- ══ TAB: REALISASI ══════════════════════════════════════════ -->
+<div id="page-realisasi" class="page">
+<div class="container">
+  <div class="alert alert-info">💡 Update progress aktual dan material terpakai di setiap item. Deviasi otomatis terhitung.</div>
+  <div id="realisasi-sections"><div class="empty"><div class="empty-icon">📊</div>Belum ada data.</div></div>
+</div>
+</div>
+
+<!-- ══ TAB: DEVIASI ════════════════════════════════════════════ -->
+<div id="page-deviasi" class="page">
+<div class="container">
+  <div id="deviasi-kpi" class="kpi-grid" style="margin-top:0"></div>
+  <div class="card">
+    <div class="card-title">📈 Deviasi Progress</div>
+    <div id="dev-progress"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">📦 Deviasi Material</div>
+    <div id="dev-material"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">💰 Deviasi Biaya</div>
+    <div id="dev-cost"></div>
+  </div>
+</div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script type="module" src="js/project.js"></script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+# netlify.toml — Konfigurasi Deploy Netlify
+
+[build]
+  publish = "."   # deploy semua file dari root folder
+
+# Redirect semua route ke halaman yang sesuai
+# Ini penting agar refresh halaman tidak 404
+[[redirects]]
+  from = "/dashboard"
+  to   = "/dashboard.html"
+  status = 200
+
+[[redirects]]
+  from = "/project"
+  to   = "/project.html"
+  status = 200
+
+# Paksa HTTPS
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
