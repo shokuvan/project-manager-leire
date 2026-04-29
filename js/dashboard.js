@@ -7,7 +7,7 @@ import { requireAuth, logout } from "./auth.js";
 import {
   collection, doc,
   addDoc, getDocs, deleteDoc, query,
-  where, orderBy, serverTimestamp
+  orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // ─── Helpers ───────────────────────────────────────────────────
@@ -55,10 +55,9 @@ async function loadProjects() {
 
   try {
     const q = query(
-      collection(db, 'projects'),
-      where('uid', '==', currentUser.uid),
-      orderBy('createdAt', 'desc')
-    );
+    collection(db, 'projects'),
+    orderBy('createdAt', 'desc')
+  );
     const snap = await getDocs(q);
     const projects = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderProjects(projects);
