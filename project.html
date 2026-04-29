@@ -30,14 +30,18 @@
 <!-- ══ TAB: SETUP ══════════════════════════════════════════════ -->
 <div id="page-setup" class="page active">
 <div class="container">
+
+  <!-- KPI -->
   <div class="kpi-grid" style="margin-top:0">
     <div class="kpi"><div class="kpi-label">Segmen</div><div class="kpi-value blue" id="kpi-seg">0</div></div>
+    <div class="kpi"><div class="kpi-label">Aktivitas</div><div class="kpi-value blue" id="kpi-act">0</div></div>
     <div class="kpi"><div class="kpi-label">Item Pekerjaan</div><div class="kpi-value blue" id="kpi-item">0</div></div>
     <div class="kpi"><div class="kpi-label">Total Durasi</div><div class="kpi-value yellow" id="kpi-dur">0 hari</div></div>
     <div class="kpi"><div class="kpi-label">Tgl Mulai</div><div class="kpi-value" id="kpi-start" style="font-size:14px">—</div></div>
     <div class="kpi"><div class="kpi-label">Est. Selesai</div><div class="kpi-value green" id="kpi-end" style="font-size:14px">—</div></div>
   </div>
 
+  <!-- Info Proyek -->
   <div class="card">
     <div class="card-title">🏗️ Info Proyek</div>
     <div class="form-row">
@@ -46,49 +50,72 @@
         <input type="text" id="proj-name" placeholder="Nama proyek...">
       </div>
       <div class="form-group">
-        <label>Tanggal Mulai</label>
+        <label>Tanggal Mulai Proyek</label>
         <input type="date" id="proj-start">
       </div>
     </div>
   </div>
 
+  <!-- LEVEL 1: SEGMEN -->
   <div class="card">
     <div class="card-title">🗂️ Segmen <span class="badge" id="seg-count-badge">0</span></div>
+    <div class="alert alert-info" style="margin-bottom:14px">Segmen adalah kelompok pekerjaan besar, misalnya: "Pekerjaan Struktur", "Pekerjaan Arsitektur".</div>
     <div class="form-row">
       <div class="form-group" style="flex:2">
         <label>Nama Segmen</label>
-        <input type="text" id="new-seg-name" placeholder="Segmen A, Divisi 1..." onkeydown="if(event.key==='Enter') addSegment()">
+        <input type="text" id="new-seg-name" placeholder="Segmen A, Pekerjaan Struktur..." onkeydown="if(event.key==='Enter') addSegment()">
       </div>
-      <div class="form-group"><label>&nbsp;</label><button class="btn btn-primary" onclick="addSegment()">+ Tambah</button></div>
+      <div class="form-group"><label>&nbsp;</label><button class="btn btn-primary" onclick="addSegment()">+ Tambah Segmen</button></div>
     </div>
     <div id="segment-list"></div>
   </div>
 
+  <!-- LEVEL 2: AKTIVITAS -->
   <div class="card">
-    <div class="card-title">📋 Item Pekerjaan <span class="badge" id="item-count-badge">0</span></div>
+    <div class="card-title">⚡ Aktivitas <span class="badge" id="act-count-badge">0</span></div>
+    <div class="alert alert-info" style="margin-bottom:14px">Aktivitas adalah tahap-tahap di dalam sebuah segmen, misalnya: "Galian Tanah", "Pengecoran Kolom".</div>
     <div class="form-row">
       <div class="form-group">
         <label>Segmen</label>
-        <select id="new-item-seg"><option value="">-- Pilih --</option></select>
+        <select id="new-act-seg"><option value="">-- Pilih Segmen --</option></select>
       </div>
       <div class="form-group" style="flex:2">
-        <label>Nama Item</label>
-        <input type="text" id="new-item-name" placeholder="Pekerjaan Galian..." onkeydown="if(event.key==='Enter') addItem()">
+        <label>Nama Aktivitas</label>
+        <input type="text" id="new-act-name" placeholder="Galian Pondasi, Pengecoran..." onkeydown="if(event.key==='Enter') addActivity()">
       </div>
-      <div class="form-group" style="min-width:90px">
+      <div class="form-group"><label>&nbsp;</label><button class="btn btn-primary" onclick="addActivity()">+ Tambah Aktivitas</button></div>
+    </div>
+    <div id="activity-list"></div>
+  </div>
+
+  <!-- LEVEL 3: ITEM PEKERJAAN -->
+  <div class="card">
+    <div class="card-title">📋 Item Pekerjaan <span class="badge" id="item-count-badge">0</span></div>
+    <div class="alert alert-info" style="margin-bottom:14px">Item adalah pekerjaan spesifik dalam sebuah aktivitas, lengkap dengan tanggal rencana dan durasi.</div>
+    <div class="form-row" style="align-items:flex-end">
+      <div class="form-group">
+        <label>Aktivitas</label>
+        <select id="new-item-act"><option value="">-- Pilih Aktivitas --</option></select>
+      </div>
+      <div class="form-group" style="flex:2">
+        <label>Nama Item Pekerjaan</label>
+        <input type="text" id="new-item-name" placeholder="Pekerjaan Galian Tanah Manual..." onkeydown="if(event.key==='Enter') addItem()">
+      </div>
+      <div class="form-group" style="min-width:120px">
+        <label>Rencana Tgl Mulai</label>
+        <input type="date" id="new-item-planstart">
+      </div>
+      <div class="form-group" style="min-width:100px">
         <label>Durasi (hari)</label>
         <input type="number" id="new-item-dur" min="1" value="1">
       </div>
-      <div class="form-group" style="min-width:100px">
-        <label>Mulai Hari ke-</label>
-        <input type="number" id="new-item-start" min="1" value="1">
-      </div>
-      <div class="form-group"><label>&nbsp;</label><button class="btn btn-success" onclick="addItem()">+ Tambah</button></div>
+      <div class="form-group"><label>&nbsp;</label><button class="btn btn-success" onclick="addItem()">+ Tambah Item</button></div>
     </div>
     <div id="items-table-wrap">
       <div class="empty"><div class="empty-icon">📋</div>Belum ada item.</div>
     </div>
   </div>
+
 </div>
 </div>
 
@@ -96,7 +123,7 @@
 <div id="page-gantt" class="page">
 <div class="container">
   <div class="card">
-    <div class="card-title">📅 Gantt Chart</div>
+    <div class="card-title">📅 Gantt Chart — Kalender Proyek</div>
     <div id="gantt-container"><div class="empty"><div class="empty-icon">📅</div>Belum ada data.</div></div>
   </div>
 </div>
@@ -117,7 +144,7 @@
 <!-- ══ TAB: REALISASI ══════════════════════════════════════════ -->
 <div id="page-realisasi" class="page">
 <div class="container">
-  <div class="alert alert-info">💡 Update progress aktual dan material terpakai di setiap item. Deviasi otomatis terhitung.</div>
+  <div class="alert alert-info">💡 Input planning satuan (volume pekerjaan) dan realisasi satuan per item. Progress % otomatis terhitung. Tanggal realisasi diinput di tab Setup.</div>
   <div id="realisasi-sections"><div class="empty"><div class="empty-icon">📊</div>Belum ada data.</div></div>
 </div>
 </div>
@@ -127,7 +154,7 @@
 <div class="container">
   <div id="deviasi-kpi" class="kpi-grid" style="margin-top:0"></div>
   <div class="card">
-    <div class="card-title">📈 Deviasi Progress</div>
+    <div class="card-title">📈 Deviasi Progress & Jadwal</div>
     <div id="dev-progress"></div>
   </div>
   <div class="card">

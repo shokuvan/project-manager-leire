@@ -310,3 +310,43 @@ tr:hover td { background: rgba(59,130,246,0.03); }
   .tab { padding: 10px 12px; font-size: 12px; }
   .login-card { padding: 32px 20px; }
 }
+
+/* ── GANTT KALENDER (revisi) ── */
+.gantt-table th { font-size:10px; font-weight:600; color:var(--muted); padding:4px 2px; border-bottom:1px solid var(--border); text-align:center; min-width:28px; }
+.gantt-label { font-size:12px; padding:5px 10px; white-space:nowrap; min-width:180px; max-width:200px; overflow:hidden; text-overflow:ellipsis; }
+.gantt-cell-plan {
+  position: absolute; inset: 2px 0;
+  border-radius: 3px;
+}
+.gantt-cell-first { border-radius: 4px 0 0 4px; }
+.gantt-cell-last  { border-radius: 0 4px 4px 0; }
+.gantt-cell-overlay {
+  position: absolute; inset: 4px 0;
+  border-radius: 3px; opacity: 0.85;
+}
+.gantt-cell-ontime { background: var(--green); }
+.gantt-cell-late   { background: var(--red); }
+
+/* ── BADGE TERLAMBAT / LEBIH AWAL ── */
+.late-badge {
+  display: inline-block;
+  background: rgba(239,68,68,0.15);
+  color: var(--red);
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: 'DM Mono', monospace;
+}
+.early-badge {
+  display: inline-block;
+  background: rgba(34,197,94,0.12);
+  color: var(--green);
+  border: 1px solid rgba(34,197,94,0.25);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: 'DM Mono', monospace;
+}
