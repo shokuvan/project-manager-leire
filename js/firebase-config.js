@@ -9,12 +9,12 @@ import { getAuth, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA56JF8eTcBQ0fRNih1GlKQnjOsR06PQ4k",
-  authDomain: "project-manager-new-2fc5b.firebaseapp.com",
-  projectId: "project-manager-new-2fc5b",
-  storageBucket: "project-manager-new-2fc5b.firebasestorage.app",
-  messagingSenderId: "155178880635",
-  appId: "1:155178880635:web:4d1fc8bf94928737da5cde"
+  apiKey: "AIzaSyCR6FsIlF5O2zCvgcvOhvdwHVPNU9SROnk",
+  authDomain: "project-manajer-1282d.firebaseapp.com",
+  projectId: "project-manajer-1282d",
+  storageBucket: "project-manajer-1282d.firebasestorage.app",
+  messagingSenderId: "508017148161",
+  appId: "1:508017148161:web:de5eca71190b14180e9b00"
 };
 
 const app      = initializeApp(firebaseConfig);
