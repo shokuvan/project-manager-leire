@@ -25,11 +25,15 @@ function fmtDate(d) {
 }
 
 // Tambah hari ke tanggal (string YYYY-MM-DD)
+// Pakai local date (bukan toISOString/UTC) supaya tidak geser di timezone WIB
 function addDays(dateStr, days) {
   if (!dateStr) return null;
   const d = new Date(dateStr + 'T00:00:00');
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  const y  = d.getFullYear();
+  const m  = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
 }
 
 // Hitung selisih hari (positif = b lebih lambat dari a)
