@@ -118,12 +118,15 @@ requireAuth(async (user) => {
   if (proj.items.length && proj.items[0].startDay !== undefined && !proj.items[0].planStart) {
     const base = proj.startDate || new Date().toISOString().slice(0,10);
     proj.items.forEach(it => {
-      if (!it.planStart) {
-        it.planStart = addDays(base, (it.startDay||1) - 1);
-        it.planEnd   = addDays(it.planStart, (it.dur||1) - 1);
-      }
+      if (!it.planStart) it.planStart = addDays(base, (it.startDay||1) - 1);
     });
   }
+
+  // Selalu hitung ulang planEnd & realisasiEnd supaya data lama di Firestore terkoreksi
+  proj.items.forEach(it => {
+    if (it.planStart && it.dur) it.planEnd = addDays(it.planStart, it.dur - 1);
+    if (it.realisasiStart && it.dur) it.realisasiEnd = addDays(it.realisasiStart, it.dur - 1);
+  });
 
   // Counter
   segCounter  = proj.segments.length   ? Math.max(...proj.segments.map(s=>s.id))   : 0;
