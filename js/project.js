@@ -560,40 +560,38 @@ function renderGantt() {
         const planStartIdx = diffDays(minDate, it.planStart);
         const planSpan     = it.dur;
 
+        // Pre-compute realisasi indices once per item
+        const planEndIdx   = planStartIdx + planSpan - 1;
+        let realStartIdx   = -1;
+        let realEndIdx     = -1;
+        if (it.realisasiStart) {
+          realStartIdx = diffDays(minDate, it.realisasiStart);
+          realEndIdx   = realStartIdx + it.dur - 1;
+        }
+
         // Cells untuk gantt
         const cells = dates.map((dt, idx) => {
-          const inPlan = idx >= planStartIdx && idx < planStartIdx + planSpan;
-
-          let realClass = '';
-          if (it.realisasiStart) {
-            const realStartIdx = diffDays(minDate, it.realisasiStart);
-            const inReal = idx >= realStartIdx && idx < realStartIdx + it.dur;
-            if (inReal) realClass = isLate ? 'gantt-cell-late' : 'gantt-cell-ontime';
-          }
-
-          // Posisi realisasi
           const tdStyle = 'padding:0;position:relative;height:28px;';
 
-          let inReal = false;
-          let realStartIdx = -1;
-          if (it.realisasiStart) {
-            realStartIdx = diffDays(minDate, it.realisasiStart);
-            inReal = idx >= realStartIdx && idx < realStartIdx + it.dur;
-          }
+          // Layer 1 – Biru: sel ini masuk rentang rencana
+          const inPlan = idx >= planStartIdx && idx <= planEndIdx;
 
-          // Apakah sel ini melewati planEnd?
-          const planEndIdx = planStartIdx + planSpan - 1;
-          const isOverdue = inReal && idx > planEndIdx; // hari realisasi yang melebihi rencana
+          // Layer 2 – Realisasi: sel ini masuk rentang realisasi
+          const inReal = realStartIdx >= 0 && idx >= realStartIdx && idx <= realEndIdx;
 
-          const cellBg = inPlan
-            ? `background:${HEX[si%6]}40;border-top:2px solid ${HEX[si%6]};border-bottom:2px solid ${HEX[si%6]};${idx===planStartIdx?`border-left:2px solid ${HEX[si%6]}`:''}${idx===planEndIdx?`;border-right:2px solid ${HEX[si%6]}`:''}` 
+          // Apakah sel realisasi ini melebihi planEnd? (terlambat = merah)
+          const isOverdue = inReal && idx > planEndIdx;
+
+          // Rencana: biru transparan dengan border warna segmen
+          const planBg = inPlan
+            ? `background:${HEX[si%6]}35;border-top:2px solid ${HEX[si%6]};border-bottom:2px solid ${HEX[si%6]};${idx===planStartIdx?`border-left:2px solid ${HEX[si%6]};`:''}${idx===planEndIdx?`border-right:2px solid ${HEX[si%6]};`:''}`
             : '';
 
           const planDiv = inPlan
-            ? `<div class="gantt-cell-plan" style="${cellBg}"></div>`
+            ? `<div style="position:absolute;inset:0;${planBg}"></div>`
             : '';
 
-          // Hijau = realisasi dalam rentang rencana, Merah = realisasi melewati rencana
+          // Realisasi: hijau jika dalam rentang rencana, merah jika melewati planEnd
           const realDiv = inReal
             ? `<div class="gantt-cell-overlay ${isOverdue ? 'gantt-cell-late' : 'gantt-cell-ontime'}"></div>`
             : '';
