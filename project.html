@@ -54,6 +54,31 @@
         <input type="date" id="proj-start">
       </div>
     </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:1">
+        <label>Volume Planning Proyek</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="number" id="proj-vol-qty" min="0" step="0.01" placeholder="0" style="flex:1">
+          <select id="proj-vol-unit" style="width:90px">
+            <option value="m¹">m¹</option>
+            <option value="m²" selected>m²</option>
+            <option value="m³">m³</option>
+            <option value="unit">unit</option>
+            <option value="buah">buah</option>
+            <option value="kg">kg</option>
+            <option value="ton">ton</option>
+            <option value="ls">ls</option>
+            <option value="set">set</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="flex:2">
+        <label style="opacity:0">‎</label>
+        <div style="font-size:11px;color:var(--muted);padding:8px 10px;background:var(--surface2);border-radius:6px;border:1px solid var(--border)">
+          📐 Volume planning total proyek. Digunakan untuk menghitung <strong style="color:var(--text)">Average Progress</strong> keseluruhan di tab Deviasi (Total Real Qty ÷ Volume Planning × 100%).
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- LEVEL 1: SEGMEN -->

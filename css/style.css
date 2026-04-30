@@ -333,6 +333,43 @@ tr:hover td { background: rgba(59,130,246,0.03); }
 .gantt-cell-ontime { background: var(--green); }
 .gantt-cell-late   { background: var(--red); }
 
+/* ── GANTT CARD PER AKTIVITAS ── */
+.gantt-act-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.gantt-act-card-title {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  font-size: 13px;
+}
+.gantt-seg-label {
+  padding: 6px 14px;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1px;
+  background: var(--bg);
+  border-left: 3px solid var(--accent);
+  margin-bottom: 8px; margin-top: 8px;
+  border-radius: 4px;
+}
+.gantt-cell { padding: 0; position: relative; height: 24px; }
+.gantt-bar-plan {
+  position: absolute; top: 3px; bottom: 3px; left: 0; right: 0;
+  pointer-events: none;
+}
+.gantt-bar-real {
+  position: absolute; top: 5px; bottom: 5px; left: 0; right: 0;
+  pointer-events: none;
+}
+.gantt-bar-first { border-radius: 4px 0 0 4px; }
+.gantt-bar-last  { border-radius: 0 4px 4px 0; }
+
 /* ── BADGE TERLAMBAT / LEBIH AWAL ── */
 .late-badge {
   display: inline-block;
