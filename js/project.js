@@ -506,7 +506,7 @@ function renderItemsTable() {
   });
 }
 
-// ─── GANTT — Per Aktivitas Card, Planning + Realisasi satu tabel ─
+// ─── GANTT — Per Aktivitas Card, Planning bar + Realisasi bar per hari ─
 function renderGantt() {
   const el = document.getElementById('gantt-container');
   const itemsWithDates = proj.items.filter(i => i.planStart);
@@ -516,7 +516,7 @@ function renderGantt() {
     return;
   }
 
-  // Hitung rentang tanggal global — gabungan planning, realisasi, dan dailyReports
+  // ─── Rentang tanggal global: gabungkan semua planStart/End + realisasiStart/End + dailyReports ───
   const allDates = [];
   proj.items.forEach(i => {
     if (i.planStart) allDates.push(i.planStart);
@@ -526,11 +526,6 @@ function renderGantt() {
     (i.dailyReports||[]).forEach(r => { if (r.date) allDates.push(r.date); });
   });
 
-  if (!allDates.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">📅</div>Belum ada data.</div>';
-    return;
-  }
-
   const sortedAll = allDates.slice().sort();
   const minDate   = sortedAll[0];
   const maxDate   = sortedAll[sortedAll.length - 1];
@@ -539,46 +534,47 @@ function renderGantt() {
   const dates = [];
   for (let d = 0; d < totalDays; d++) dates.push(addDays(minDate, d));
 
-  // ─── Header bulan + hari ───────────────────────────────────────
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // ─── Header bulan ─────────────────────────────────────────────
   const months = [];
   let lastMonth = '';
-  dates.forEach((dt, idx) => {
+  dates.forEach(dt => {
     const mo = dt.slice(0, 7);
-    if (mo !== lastMonth) { months.push({ mo, start: idx, count: 0 }); lastMonth = mo; }
+    if (mo !== lastMonth) { months.push({ mo, count: 0 }); lastMonth = mo; }
     months[months.length - 1].count++;
   });
 
   const monthHeader = months.map(m => {
-    const d = new Date(m.mo + '-01');
-    const label = d.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
-    return `<th colspan="${m.count}" style="text-align:center;border-left:2px solid var(--border);color:var(--text);font-size:11px;background:var(--surface2);padding:4px 2px;white-space:nowrap">${label}</th>`;
+    const label = new Date(m.mo + '-01').toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+    return `<th colspan="${m.count}" style="text-align:center;border-left:2px solid var(--border);font-size:11px;background:var(--surface2);padding:3px 2px;white-space:nowrap">${label}</th>`;
   }).join('');
 
+  // ─── Header hari ──────────────────────────────────────────────
   const dayHeader = dates.map(dt => {
     const d = new Date(dt + 'T00:00:00');
     const isFirst   = d.getDate() === 1;
     const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-    const today     = new Date().toISOString().slice(0, 10);
-    const isToday   = dt === today;
-    return `<th style="min-width:24px;width:24px;text-align:center;font-size:9px;padding:2px 0;
-      ${isFirst ? 'border-left:2px solid var(--border);' : ''}
-      ${isWeekend ? 'color:var(--muted);background:rgba(0,0,0,0.04);' : ''}
-      ${isToday ? 'background:rgba(59,130,246,0.18);color:var(--blue);font-weight:700;' : ''}
+    const isToday   = dt === todayStr;
+    return `<th style="min-width:32px;width:32px;text-align:center;font-size:9px;padding:2px 0;box-sizing:border-box;
+      ${isFirst   ? 'border-left:2px solid var(--border);' : ''}
+      ${isWeekend ? 'background:rgba(0,0,0,0.05);color:var(--muted);' : ''}
+      ${isToday   ? 'background:rgba(59,130,246,0.2);color:var(--blue);font-weight:800;' : ''}
     ">${d.getDate()}</th>`;
   }).join('');
 
-  // ─── Build card per aktivitas ──────────────────────────────────
+  // ─── Build HTML ────────────────────────────────────────────────
   let cardsHtml = '';
 
   proj.segments.forEach((seg, si) => {
-    const segColor  = HEX[si % 6];
-    const segActs   = proj.activities.filter(a => a.segId === seg.id);
+    const segColor = HEX[si % 6];
+    const segActs  = proj.activities.filter(a => a.segId === seg.id);
     const segHasItems = proj.items.some(i => segActs.some(a => a.id === i.actId) && i.planStart);
     if (!segHasItems) return;
 
-    // Segmen header
+    // ── 📦 Segmen card header ──────────────────────────────────
     cardsHtml += `
-      <div class="gantt-seg-label" style="border-left-color:${segColor};margin-top:12px">
+      <div class="gantt-seg-label" style="border-left:4px solid ${segColor};padding:8px 12px;margin:16px 0 6px;background:${segColor}12;border-radius:0 6px 6px 0">
         <span style="color:${segColor};font-weight:700;font-size:13px">📦 ${seg.name}</span>
       </div>`;
 
@@ -586,89 +582,128 @@ function renderGantt() {
       const actItems = proj.items.filter(i => i.actId === act.id && i.planStart);
       if (!actItems.length) return;
 
-      // Bangun rows — tiap item punya 2 baris: Planning (kuning) dan Realisasi (hijau/merah)
+      // ── 🃏 Aktivitas: satu tabel, tiap item = 2 row (Planning + Realisasi) ──
       let tbodyRows = '';
 
       actItems.forEach((it, iti) => {
         const planStartIdx = diffDays(minDate, it.planStart);
         const planEndIdx   = planStartIdx + (it.dur || 1) - 1;
 
-        // Kumpulkan set tanggal yg punya dailyReport untuk item ini
-        const reportDates = new Set((it.dailyReports || []).map(r => r.date).filter(Boolean));
-        const sortedRepDates = Array.from(reportDates).sort();
-
         const totalPlanQty = it.planQty || 0;
         const cumulReal    = calcCumulativeQty(it);
-        const pct          = totalPlanQty > 0 ? Math.min(100, Math.round(cumulReal / totalPlanQty * 100)) : (reportDates.size > 0 ? 100 : 0);
+        const pctTotal     = totalPlanQty > 0 ? Math.min(100, (cumulReal / totalPlanQty * 100)) : 0;
+        const pctTotalRnd  = Math.round(pctTotal);
+        const pctColor     = pctTotalRnd >= 100 ? 'var(--green)' : pctTotalRnd > 0 ? 'var(--yellow)' : 'var(--muted)';
 
-        // ── ROW PLANNING ──────────────────────────────────────────
+        // Sort dailyReports by date
+        const sortedReports = (it.dailyReports || [])
+          .filter(r => r.date)
+          .slice()
+          .sort((a, b) => a.date.localeCompare(b.date));
+        const reportDateSet = new Set(sortedReports.map(r => r.date));
+        const firstRepDate  = sortedReports.length ? sortedReports[0].date : null;
+        const lastRepDate   = sortedReports.length ? sortedReports[sortedReports.length - 1].date : null;
+
+        // ── Baris 1: PLANNING ─────────────────────────────────
+        // Bar planning = solid block kuning/warna segmen dari planStart → planEnd
         const planCells = dates.map((dt, idx) => {
-          const inPlan  = idx >= planStartIdx && idx <= planEndIdx;
-          if (!inPlan) return `<td class="gantt-cell"></td>`;
+          const inPlan = idx >= planStartIdx && idx <= planEndIdx;
+          if (!inPlan) {
+            // Warnai kolom hari ini
+            return dt === todayStr
+              ? `<td class="gantt-cell" style="background:rgba(59,130,246,0.08)"></td>`
+              : `<td class="gantt-cell"></td>`;
+          }
           const isF = idx === planStartIdx;
           const isL = idx === planEndIdx;
-          const r   = isF && isL ? '4px' : isF ? '4px 0 0 4px' : isL ? '0 4px 4px 0' : '0';
-          return `<td class="gantt-cell">
-            <div style="height:10px;background:${segColor}28;border-top:2px solid ${segColor};border-bottom:2px solid ${segColor};
-              ${isF?'border-left:2px solid '+segColor+';':''}
-              ${isL?'border-right:2px solid '+segColor+';':''}
-              border-radius:${r};box-sizing:border-box;"></div>
+          const br  = isF && isL ? '4px' : isF ? '4px 0 0 4px' : isL ? '0 4px 4px 0' : '0';
+          const todayCol = dt === todayStr ? 'background:rgba(59,130,246,0.08);' : '';
+          return `<td class="gantt-cell" style="${todayCol}">
+            <div style="
+              height:14px;
+              background:${segColor}30;
+              border-top:2px solid ${segColor};
+              border-bottom:2px solid ${segColor};
+              ${isF ? 'border-left:2px solid '+segColor+';' : ''}
+              ${isL ? 'border-right:2px solid '+segColor+';' : ''}
+              border-radius:${br};
+              box-sizing:border-box;
+            "></div>
           </td>`;
         }).join('');
 
-        const pctColor = pct >= 100 ? 'var(--green)' : pct > 0 ? 'var(--yellow)' : 'var(--border)';
         tbodyRows += `
-          <tr style="border-top:${iti > 0 ? '2px solid var(--border)' : 'none'}">
-            <td class="gantt-label" title="${it.name}" rowspan="2" style="vertical-align:middle;font-weight:600;border-right:1px solid var(--border)">
+          <tr style="${iti > 0 ? 'border-top:2px solid var(--border);' : ''}">
+            <td class="gantt-label" rowspan="2" style="vertical-align:middle;font-weight:600;border-right:1px solid var(--border);padding:6px 8px;max-width:160px" title="${it.name}">
               ${it.name}
             </td>
-            <td style="text-align:center;font-size:10px;color:var(--yellow);white-space:nowrap;padding:2px 4px">📅 ${it.dur}hr</td>
-            <td style="text-align:center;min-width:52px;padding:2px 4px">
-              <div class="prog-bar" style="width:40px;display:inline-block;vertical-align:middle">
-                <div class="prog-fill" style="width:${pct}%;background:${pctColor}"></div>
+            <td rowspan="2" style="vertical-align:middle;text-align:center;padding:4px;border-right:1px solid var(--border)">
+              <div class="prog-bar" style="width:36px;margin:0 auto 3px">
+                <div class="prog-fill" style="width:${pctTotalRnd}%;background:${pctColor}"></div>
               </div>
-              <span style="font-size:9px;color:${pctColor};display:block">${pct}%</span>
+              <span style="font-size:9px;color:${pctColor};font-weight:700">${pctTotalRnd}%</span>
+            </td>
+            <td style="font-size:10px;color:${segColor};font-weight:700;padding:2px 6px;white-space:nowrap;background:${segColor}08">
+              📅 Planning
+              <span style="font-weight:400;color:var(--muted);margin-left:4px">${fmtDate(it.planStart)} → ${fmtDate(it.planEnd)} (${it.dur}hr)</span>
             </td>
             ${planCells}
           </tr>`;
 
-        // ── ROW REALISASI ─────────────────────────────────────────
+        // ── Baris 2: REALISASI ────────────────────────────────
+        // Tiap hari yg ada dailyReport = 1 block, di dalamnya tulis % kumulatif hari itu
         const realCells = dates.map((dt, idx) => {
-          if (!reportDates.has(dt)) return `<td class="gantt-cell"></td>`;
+          const todayCol = dt === todayStr ? 'background:rgba(59,130,246,0.08);' : '';
 
-          const report = (it.dailyReports || []).find(r => r.date === dt);
+          if (!reportDateSet.has(dt)) {
+            return `<td class="gantt-cell" style="${todayCol}"></td>`;
+          }
+
+          const report = sortedReports.find(r => r.date === dt);
           const qty    = report ? (report.qty || 0) : 0;
           const cumQty = calcCumulativeQtyUntil(it, dt);
-          const pctDay = totalPlanQty > 0 ? Math.min(100, cumQty / totalPlanQty * 100) : 0;
+          const pctDay = totalPlanQty > 0 ? Math.min(100, (cumQty / totalPlanQty * 100)) : 100;
+          const pctDayRnd = Math.round(pctDay);
 
-          const isF  = dt === sortedRepDates[0];
-          const isL  = dt === sortedRepDates[sortedRepDates.length - 1];
+          const isF  = dt === firstRepDate;
+          const isL  = dt === lastRepDate;
           const late = it.planEnd && dt > it.planEnd;
-          const col  = late ? 'var(--red)' : 'var(--green)';
-          const r    = isF && isL ? '4px' : isF ? '4px 0 0 4px' : isL ? '0 4px 4px 0' : '0';
+          const col  = late ? 'var(--red)' : '#22c55e';
+          const br   = isF && isL ? '4px' : isF ? '4px 0 0 4px' : isL ? '0 4px 4px 0' : '0';
 
-          return `<td class="gantt-cell">
-            <div style="height:10px;background:${col};border-radius:${r};opacity:0.85;box-sizing:border-box;" 
-              title="${fmtDate(dt)} | qty: ${qty} | kumulatif: ${cumQty.toFixed(2)} (${pctDay.toFixed(1)}%)"></div>
+          // Tulis % di dalam block — teks hanya muat kalau block cukup lebar (selalu tampil, ukuran kecil)
+          return `<td class="gantt-cell" style="${todayCol}">
+            <div style="
+              height:14px;
+              background:${col};
+              border-radius:${br};
+              display:flex;
+              align-items:center;
+              justify-content:center;
+              overflow:hidden;
+              box-sizing:border-box;
+            " title="${fmtDate(dt)} | qty: ${qty} ${it.planUnit||''} | kumulatif: ${cumQty.toFixed(2)} (${pctDayRnd}%)">
+              <span style="font-size:7px;font-weight:800;color:#fff;line-height:1;white-space:nowrap;text-shadow:0 0 2px rgba(0,0,0,0.5)">${pctDayRnd}%</span>
+            </div>
           </td>`;
         }).join('');
 
-        const hasReal = reportDates.size > 0;
+        const hasReal = sortedReports.length > 0;
         tbodyRows += `
           <tr>
-            <td style="text-align:center;font-size:10px;color:${hasReal?'var(--green)':'var(--muted)'};white-space:nowrap;padding:2px 4px">
-              📊 ${hasReal ? fmtDate(sortedRepDates[0]).slice(0, 6) : '—'}
+            <td style="font-size:10px;color:${hasReal?'#22c55e':'var(--muted)'};font-weight:700;padding:2px 6px;white-space:nowrap;background:${hasReal?'rgba(34,197,94,0.06)':''}">
+              📊 Realisasi
+              <span style="font-weight:400;color:var(--muted);margin-left:4px">${hasReal ? fmtDate(firstRepDate)+' → '+(lastRepDate===firstRepDate?'':fmtDate(lastRepDate)) : '—'}</span>
             </td>
-            <td style="padding:2px 4px"></td>
             ${realCells}
           </tr>`;
       });
 
-      // ─── Satu tabel per aktivitas ──────────────────────────────
+      // ── Render card aktivitas ────────────────────────────────
       cardsHtml += `
-        <div class="gantt-act-card" style="margin-left:16px">
+        <div class="gantt-act-card" style="margin-left:20px;margin-bottom:12px">
           <div class="gantt-act-card-title" style="border-left-color:${segColor}">
-            <span style="color:${segColor};font-size:12px">🃏</span>
+            <span style="color:${segColor};margin-right:6px">🃏</span>
             <span style="font-weight:700">${act.name}</span>
             <span style="font-size:11px;color:var(--muted);margin-left:auto">${actItems.length} item</span>
           </div>
@@ -676,9 +711,9 @@ function renderGantt() {
             <table class="gantt-table">
               <thead>
                 <tr>
-                  <th class="gantt-label" rowspan="2" style="text-align:left;vertical-align:bottom;min-width:140px;max-width:180px">Item Pekerjaan</th>
-                  <th rowspan="2" style="min-width:44px;text-align:center">Tipe</th>
-                  <th rowspan="2" style="min-width:52px;text-align:center">Prog</th>
+                  <th class="gantt-label" rowspan="2" style="text-align:left;vertical-align:bottom;min-width:150px;max-width:200px">Item Pekerjaan</th>
+                  <th rowspan="2" style="min-width:50px;text-align:center">Prog</th>
+                  <th rowspan="2" style="min-width:180px;text-align:left">Tipe / Rentang</th>
                   ${monthHeader}
                 </tr>
                 <tr>${dayHeader}</tr>
@@ -690,31 +725,33 @@ function renderGantt() {
     });
   });
 
-  // Legend + marker hari ini
-  const todayStr   = new Date().toISOString().slice(0, 10);
   const todayInRange = todayStr >= minDate && todayStr <= maxDate;
 
   el.innerHTML = `
     ${cardsHtml}
-    <div style="margin-top:16px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--muted);padding:10px 0;border-top:1px solid var(--border)">
+    <div style="margin-top:16px;display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--muted);padding:10px 0;border-top:1px solid var(--border)">
       <strong style="color:var(--text)">Legenda:</strong>
       <div style="display:flex;align-items:center;gap:5px">
-        <div style="width:22px;height:10px;background:rgba(59,130,246,0.2);border:2px solid #3b82f6;border-radius:2px"></div>
+        <div style="width:28px;height:14px;background:rgba(59,130,246,0.2);border:2px solid #3b82f6;border-radius:3px"></div>
         <span>Planning (Rencana)</span>
       </div>
       <div style="display:flex;align-items:center;gap:5px">
-        <div style="width:22px;height:10px;background:var(--green);border-radius:2px;opacity:0.85"></div>
-        <span>Realisasi Tepat/Lebih Awal</span>
+        <div style="width:28px;height:14px;background:#22c55e;border-radius:3px;display:flex;align-items:center;justify-content:center">
+          <span style="font-size:7px;color:#fff;font-weight:800">35%</span>
+        </div>
+        <span>Realisasi Tepat/Lebih Awal (angka = % kumulatif)</span>
       </div>
       <div style="display:flex;align-items:center;gap:5px">
-        <div style="width:22px;height:10px;background:var(--red);border-radius:2px;opacity:0.85"></div>
-        <span>Realisasi Terlambat</span>
+        <div style="width:28px;height:14px;background:var(--red);border-radius:3px;display:flex;align-items:center;justify-content:center">
+          <span style="font-size:7px;color:#fff;font-weight:800">80%</span>
+        </div>
+        <span>Realisasi Terlambat (melewati tanggal rencana selesai)</span>
       </div>
       ${todayInRange ? `<div style="display:flex;align-items:center;gap:5px">
-        <div style="width:22px;height:10px;background:rgba(59,130,246,0.18);border:1px solid var(--blue);border-radius:2px"></div>
-        <span>Hari Ini (${fmtDate(todayStr)})</span>
+        <div style="width:28px;height:14px;background:rgba(59,130,246,0.2);border:1px solid var(--blue);border-radius:3px"></div>
+        <span>Hari Ini</span>
       </div>` : ''}
-      <span style="margin-left:auto;font-size:10px">💡 Hover bar realisasi untuk detail qty</span>
+      <span style="margin-left:auto;font-size:10px">💡 Hover bar untuk detail qty & kumulatif</span>
     </div>`;
 }
 
