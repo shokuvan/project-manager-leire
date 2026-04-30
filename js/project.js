@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // PROJECT.JS — Detail Proyek: Setup, Gantt, Biaya, Realisasi, Deviasi
-// Revisi: Volume Planning di Setup | Gantt per Aktivitas Card |
-//         Report Harian di Realisasi | Bobot + AvgProgress di Deviasi
+// Revisi: Gantt Planning+Realisasi bar per item | Report Harian
+//         mulai dari tanggal realisasi dimulai yg diinput user
 // ═══════════════════════════════════════════════════════════════
 
 import { db } from "./firebase-config.js";
@@ -73,13 +73,13 @@ const debouncedSave = debounce(async () => {
   if (!projId || !proj) return;
   try {
     await updateDoc(doc(db, 'projects', projId), {
-      name:         proj.name       || '',
-      startDate:    proj.startDate  || '',
+      name:           proj.name          || '',
+      startDate:      proj.startDate     || '',
       volumePlanning: proj.volumePlanning || 0,
-      volumeUnit:   proj.volumeUnit  || 'm²',
-      segments:     proj.segments   || [],
-      activities:   proj.activities || [],
-      items:        proj.items      || []
+      volumeUnit:     proj.volumeUnit    || 'm²',
+      segments:       proj.segments      || [],
+      activities:     proj.activities    || [],
+      items:          proj.items         || []
     });
     const ind = document.getElementById('save-indicator');
     if (ind) { ind.textContent = '✅ Tersimpan'; ind.style.color = 'var(--green)'; setTimeout(()=>{ ind.textContent=''; }, 2000); }
@@ -126,16 +126,18 @@ requireAuth(async (user) => {
   proj.items.forEach(it => {
     if (it.planStart && it.dur) it.planEnd = addDays(it.planStart, it.dur - 1);
     if (it.realisasiStart && it.dur) it.realisasiEnd = addDays(it.realisasiStart, it.dur - 1);
-    // Pastikan dailyReports ada
     if (!it.dailyReports) it.dailyReports = [];
+    // reportStartDate: tanggal awal user mulai input report harian
+    // default = realisasiStart jika ada, atau kosong
+    if (!it.reportStartDate) it.reportStartDate = it.realisasiStart || '';
   });
 
   segCounter  = proj.segments.length   ? Math.max(...proj.segments.map(s=>s.id))   : 0;
   actCounter  = proj.activities.length  ? Math.max(...proj.activities.map(a=>a.id)) : 0;
   itemCounter = proj.items.length       ? Math.max(...proj.items.map(i=>i.id))      : 0;
 
-  document.getElementById('proj-name').value  = proj.name      || '';
-  document.getElementById('proj-start').value = proj.startDate || '';
+  document.getElementById('proj-name').value     = proj.name      || '';
+  document.getElementById('proj-start').value    = proj.startDate || '';
   document.getElementById('proj-vol-qty').value  = proj.volumePlanning || 0;
   document.getElementById('proj-vol-unit').value = proj.volumeUnit    || 'm²';
   document.getElementById('header-proj-name').textContent = proj.name || 'Tanpa Nama';
@@ -188,25 +190,24 @@ function renderAll() {
 
 // ─── KPI ────────────────────────────────────────────────────────
 function updateKPI() {
-  const totalItems = proj.items.length;
   document.getElementById('kpi-seg').textContent  = proj.segments.length;
   document.getElementById('kpi-act').textContent  = proj.activities.length;
-  document.getElementById('kpi-item').textContent = totalItems;
+  document.getElementById('kpi-item').textContent = proj.items.length;
 
-  if (totalItems && proj.startDate) {
+  if (proj.items.length && proj.startDate) {
     const starts = proj.items.filter(i=>i.planStart).map(i=>i.planStart);
     const ends   = proj.items.filter(i=>i.planEnd).map(i=>i.planEnd);
     if (starts.length) {
       const earliest = starts.sort()[0];
       const latest   = ends.sort().reverse()[0];
       const dur = diffDays(earliest, latest) + 1;
-      document.getElementById('kpi-dur').textContent  = dur + ' hari';
+      document.getElementById('kpi-dur').textContent   = dur + ' hari';
       document.getElementById('kpi-start').textContent = fmtDate(earliest);
       document.getElementById('kpi-end').textContent   = fmtDate(latest);
       return;
     }
   }
-  document.getElementById('kpi-dur').textContent  = '0 hari';
+  document.getElementById('kpi-dur').textContent   = '0 hari';
   document.getElementById('kpi-start').textContent = proj.startDate ? fmtDate(proj.startDate) : '—';
   document.getElementById('kpi-end').textContent   = '—';
 }
@@ -236,7 +237,7 @@ function renderSegments() {
   el.innerHTML = `<div class="table-wrap mt8"><table>
     <tr><th>#</th><th>Nama Segmen</th><th>Aktivitas</th><th>Item</th><th></th></tr>
     ${proj.segments.map((s, i) => {
-      const actIds = proj.activities.filter(a=>a.segId===s.id).map(a=>a.id);
+      const actIds  = proj.activities.filter(a=>a.segId===s.id).map(a=>a.id);
       const itemCnt = proj.items.filter(it=>actIds.includes(it.actId)).length;
       return `<tr>
         <td><span class="seg-strip bg${i%6}"></span></td>
@@ -320,13 +321,13 @@ function updateActivitySelect() {
 
 // ─── ITEM PEKERJAAN ─────────────────────────────────────────────
 window.addItem = () => {
-  const actId    = parseInt(document.getElementById('new-item-act').value);
-  const name     = document.getElementById('new-item-name').value.trim();
-  const dur      = parseInt(document.getElementById('new-item-dur').value) || 1;
+  const actId     = parseInt(document.getElementById('new-item-act').value);
+  const name      = document.getElementById('new-item-name').value.trim();
+  const dur       = parseInt(document.getElementById('new-item-dur').value) || 1;
   const planStart = document.getElementById('new-item-planstart').value;
 
-  if (!actId)    return alert('Pilih aktivitas!');
-  if (!name)     return alert('Masukkan nama item!');
+  if (!actId)     return alert('Pilih aktivitas!');
+  if (!name)      return alert('Masukkan nama item!');
   if (!planStart) return alert('Masukkan tanggal mulai rencana!');
 
   const planEnd = addDays(planStart, dur - 1);
@@ -334,12 +335,13 @@ window.addItem = () => {
   proj.items.push({
     id: ++itemCounter, actId, name, dur, planStart, planEnd,
     realisasiStart: '', realisasiEnd: '',
+    reportStartDate: '',
     planQty: 0, planUnit: 'm²',
     realisasiQty: 0,
     dailyReports: [],
     tenaga: [], material: [], costActual: 0, materialActual: []
   });
-  document.getElementById('new-item-name').value = '';
+  document.getElementById('new-item-name').value      = '';
   document.getElementById('new-item-planstart').value = '';
   saveProj(); renderAll();
 };
@@ -352,40 +354,31 @@ window.removeItem = (id) => {
 window.updRealisasiStart = (id, val) => {
   const it = proj.items.find(i => i.id === id);
   if (!it) return;
-  const shift = it.realisasiStart && val ? diffDays(it.realisasiStart, val) : 0;
   it.realisasiStart = val;
   it.realisasiEnd   = val ? addDays(val, it.dur - 1) : '';
-
+  // Set reportStartDate ke realisasiStart jika belum ada report
+  if (!it.reportStartDate || !it.dailyReports.length) {
+    it.reportStartDate = val;
+    // Update date input di form report harian jika ada
+    const rsEl = document.getElementById(`report-start-date-${id}`);
+    if (rsEl) rsEl.value = val;
+    const newRepDate = document.getElementById(`new-report-date-${id}`);
+    if (newRepDate && val) newRepDate.value = val;
+  }
   const endEl = document.getElementById(`real-end-${id}`);
   if (endEl) endEl.textContent = it.realisasiEnd ? fmtDate(it.realisasiEnd) : '—';
-
-  if (shift !== 0 && val) {
-    const act = proj.activities.find(a => a.id === it.actId);
-    if (act) {
-      const seg = proj.segments.find(s => s.id === act.segId);
-      if (seg) {
-        const segActs = proj.activities.filter(a => a.segId === seg.id);
-        const actIdx  = segActs.findIndex(a => a.id === act.id);
-        const affectedActIds = segActs.slice(actIdx).map(a => a.id);
-        proj.items.forEach(other => {
-          if (other.id === it.id) return;
-          if (!affectedActIds.includes(other.actId)) return;
-          if (!other.realisasiStart) return;
-          other.realisasiStart = addDays(other.realisasiStart, shift);
-          other.realisasiEnd   = addDays(other.realisasiStart, other.dur - 1);
-          const otherStartEl = document.getElementById(`real-start-input-${other.id}`);
-          if (otherStartEl) otherStartEl.value = other.realisasiStart;
-          const otherEndEl = document.getElementById(`real-end-${other.id}`);
-          if (otherEndEl) otherEndEl.textContent = fmtDate(other.realisasiEnd);
-          const otherBadgeEl = document.getElementById(`late-badge-${other.id}`);
-          if (otherBadgeEl) otherBadgeEl.innerHTML = lateBadgeHtml(other);
-        });
-      }
-    }
-  }
-
   const badgeEl = document.getElementById(`late-badge-${id}`);
   if (badgeEl) badgeEl.innerHTML = lateBadgeHtml(it);
+  saveProj();
+};
+
+window.updReportStartDate = (id, val) => {
+  const it = proj.items.find(i => i.id === id);
+  if (!it) return;
+  it.reportStartDate = val;
+  // Update default tanggal di form tambah report
+  const newRepDate = document.getElementById(`new-report-date-${id}`);
+  if (newRepDate) newRepDate.value = val;
   saveProj();
 };
 
@@ -401,8 +394,8 @@ window.updDur = (id, val) => {
   const it = proj.items.find(i => i.id === id);
   if (!it) return;
   it.dur = parseInt(val) || 1;
-  it.planEnd = it.planStart ? addDays(it.planStart, it.dur - 1) : '';
-  it.realisasiEnd = it.realisasiStart ? addDays(it.realisasiStart, it.dur - 1) : '';
+  it.planEnd       = it.planStart       ? addDays(it.planStart, it.dur - 1)       : '';
+  it.realisasiEnd  = it.realisasiStart  ? addDays(it.realisasiStart, it.dur - 1)  : '';
   const planEndEl = document.getElementById(`plan-end-${id}`);
   if (planEndEl) planEndEl.textContent = fmtDate(it.planEnd);
   const realEndEl = document.getElementById(`real-end-${id}`);
@@ -420,7 +413,7 @@ function renderItemsTable() {
 
   let html = '';
   proj.segments.forEach((seg, si) => {
-    const segActs = proj.activities.filter(a => a.segId === seg.id);
+    const segActs  = proj.activities.filter(a => a.segId === seg.id);
     const segItems = proj.items.filter(i => segActs.some(a => a.id === i.actId));
     if (!segItems.length) return;
 
@@ -441,14 +434,7 @@ function renderItemsTable() {
             <th>Keterlambatan</th><th></th>
           </tr>
           <tbody data-act-id="${act.id}">
-          ${actItems.map((it, idx) => {
-            const late = it.realisasiStart && it.planStart ? diffDays(it.planStart, it.realisasiStart) : 0;
-            const lateLabel = late > 0
-              ? `<span class="late-badge">+${late} hr terlambat</span>`
-              : late < 0
-                ? `<span class="early-badge">${late} hr lebih awal</span>`
-                : it.realisasiStart ? `<span style="color:var(--green);font-size:11px">✅ Tepat waktu</span>` : `<span style="color:var(--muted);font-size:11px">—</span>`;
-            return `<tr draggable="true">
+          ${actItems.map((it, idx) => `<tr draggable="true">
               <td style="color:var(--muted);font-size:16px;text-align:center;cursor:grab">⠿</td>
               <td class="mono">${idx+1}</td>
               <td style="font-weight:600">${it.name}</td>
@@ -459,10 +445,9 @@ function renderItemsTable() {
               <td><input type="date" id="real-start-input-${it.id}" value="${it.realisasiStart||''}" style="width:150px"
                 onchange="updRealisasiStart(${it.id},this.value)"></td>
               <td class="mono" id="real-end-${it.id}">${it.realisasiEnd ? fmtDate(it.realisasiEnd) : '—'}</td>
-              <td id="late-badge-${it.id}">${lateLabel}</td>
+              <td id="late-badge-${it.id}">${lateBadgeHtml(it)}</td>
               <td><button class="btn btn-danger" onclick="removeItem(${it.id})">✕</button></td>
-            </tr>`;
-          }).join('')}
+            </tr>`).join('')}
           </tbody>
         </table></div>
       </div>`;
@@ -506,7 +491,10 @@ function renderItemsTable() {
   });
 }
 
-// ─── GANTT — Per Aktivitas Card, Planning bar + Realisasi bar per hari ─
+// ─── GANTT ─────────────────────────────────────────────────────
+// Struktur per item: 2 baris
+//   Baris 1 - Planning: bar dari planStart → planEnd (outline/warna segmen transparan)
+//   Baris 2 - Realisasi: per hari yang ada daily report = 1 blok solid dengan % kumulatif di dalamnya
 function renderGantt() {
   const el = document.getElementById('gantt-container');
   const itemsWithDates = proj.items.filter(i => i.planStart);
@@ -516,7 +504,7 @@ function renderGantt() {
     return;
   }
 
-  // ─── Rentang tanggal global: gabungkan semua planStart/End + realisasiStart/End + dailyReports ───
+  // ─── Rentang tanggal global ───────────────────────────────────
   const allDates = [];
   proj.items.forEach(i => {
     if (i.planStart) allDates.push(i.planStart);
@@ -556,14 +544,14 @@ function renderGantt() {
     const isFirst   = d.getDate() === 1;
     const isWeekend = d.getDay() === 0 || d.getDay() === 6;
     const isToday   = dt === todayStr;
-    return `<th style="min-width:32px;width:32px;text-align:center;font-size:9px;padding:2px 0;box-sizing:border-box;
+    return `<th style="min-width:30px;width:30px;text-align:center;font-size:9px;padding:2px 0;box-sizing:border-box;
       ${isFirst   ? 'border-left:2px solid var(--border);' : ''}
-      ${isWeekend ? 'background:rgba(0,0,0,0.05);color:var(--muted);' : ''}
-      ${isToday   ? 'background:rgba(59,130,246,0.2);color:var(--blue);font-weight:800;' : ''}
+      ${isWeekend ? 'background:rgba(0,0,0,0.08);color:var(--muted);' : ''}
+      ${isToday   ? 'background:rgba(59,130,246,0.25);color:var(--blue);font-weight:800;' : ''}
     ">${d.getDate()}</th>`;
   }).join('');
 
-  // ─── Build HTML ────────────────────────────────────────────────
+  // ─── Build HTML per Segmen → Aktivitas → Item ─────────────────
   let cardsHtml = '';
 
   proj.segments.forEach((seg, si) => {
@@ -572,9 +560,8 @@ function renderGantt() {
     const segHasItems = proj.items.some(i => segActs.some(a => a.id === i.actId) && i.planStart);
     if (!segHasItems) return;
 
-    // ── 📦 Segmen card header ──────────────────────────────────
     cardsHtml += `
-      <div class="gantt-seg-label" style="border-left:4px solid ${segColor};padding:8px 12px;margin:16px 0 6px;background:${segColor}12;border-radius:0 6px 6px 0">
+      <div style="border-left:4px solid ${segColor};padding:8px 12px;margin:16px 0 6px;background:${segColor}12;border-radius:0 6px 6px 0">
         <span style="color:${segColor};font-weight:700;font-size:13px">📦 ${seg.name}</span>
       </div>`;
 
@@ -582,7 +569,6 @@ function renderGantt() {
       const actItems = proj.items.filter(i => i.actId === act.id && i.planStart);
       if (!actItems.length) return;
 
-      // ── 🃏 Aktivitas: satu tabel, tiap item = 2 row (Planning + Realisasi) ──
       let tbodyRows = '';
 
       actItems.forEach((it, iti) => {
@@ -595,33 +581,27 @@ function renderGantt() {
         const pctTotalRnd  = Math.round(pctTotal);
         const pctColor     = pctTotalRnd >= 100 ? 'var(--green)' : pctTotalRnd > 0 ? 'var(--yellow)' : 'var(--muted)';
 
-        // Sort dailyReports by date
         const sortedReports = (it.dailyReports || [])
           .filter(r => r.date)
           .slice()
           .sort((a, b) => a.date.localeCompare(b.date));
         const reportDateSet = new Set(sortedReports.map(r => r.date));
-        const firstRepDate  = sortedReports.length ? sortedReports[0].date : null;
-        const lastRepDate   = sortedReports.length ? sortedReports[sortedReports.length - 1].date : null;
 
         // ── Baris 1: PLANNING ─────────────────────────────────
-        // Bar planning = solid block kuning/warna segmen dari planStart → planEnd
         const planCells = dates.map((dt, idx) => {
-          const inPlan = idx >= planStartIdx && idx <= planEndIdx;
-          if (!inPlan) {
-            // Warnai kolom hari ini
-            return dt === todayStr
-              ? `<td class="gantt-cell" style="background:rgba(59,130,246,0.08)"></td>`
-              : `<td class="gantt-cell"></td>`;
-          }
+          const todayBg = dt === todayStr ? 'background:rgba(59,130,246,0.08);' : '';
+          const inPlan  = idx >= planStartIdx && idx <= planEndIdx;
+
+          if (!inPlan) return `<td class="gantt-cell" style="${todayBg}padding:2px 0"></td>`;
+
           const isF = idx === planStartIdx;
           const isL = idx === planEndIdx;
           const br  = isF && isL ? '4px' : isF ? '4px 0 0 4px' : isL ? '0 4px 4px 0' : '0';
-          const todayCol = dt === todayStr ? 'background:rgba(59,130,246,0.08);' : '';
-          return `<td class="gantt-cell" style="${todayCol}">
+
+          return `<td class="gantt-cell" style="${todayBg}padding:2px 0">
             <div style="
               height:14px;
-              background:${segColor}30;
+              background:${segColor}22;
               border-top:2px solid ${segColor};
               border-bottom:2px solid ${segColor};
               ${isF ? 'border-left:2px solid '+segColor+';' : ''}
@@ -632,50 +612,55 @@ function renderGantt() {
           </td>`;
         }).join('');
 
+        // Baris planning: judul + info
         tbodyRows += `
           <tr style="${iti > 0 ? 'border-top:2px solid var(--border);' : ''}">
-            <td class="gantt-label" rowspan="2" style="vertical-align:middle;font-weight:600;border-right:1px solid var(--border);padding:6px 8px;max-width:160px" title="${it.name}">
+            <td class="gantt-label" rowspan="2" style="vertical-align:middle;font-weight:600;border-right:1px solid var(--border);padding:4px 8px;max-width:160px;font-size:12px" title="${it.name}">
               ${it.name}
             </td>
-            <td rowspan="2" style="vertical-align:middle;text-align:center;padding:4px;border-right:1px solid var(--border)">
-              <div class="prog-bar" style="width:36px;margin:0 auto 3px">
+            <td rowspan="2" style="vertical-align:middle;text-align:center;padding:4px 6px;border-right:1px solid var(--border);min-width:46px">
+              <div class="prog-bar" style="width:34px;margin:0 auto 3px">
                 <div class="prog-fill" style="width:${pctTotalRnd}%;background:${pctColor}"></div>
               </div>
               <span style="font-size:9px;color:${pctColor};font-weight:700">${pctTotalRnd}%</span>
             </td>
-            <td style="font-size:10px;color:${segColor};font-weight:700;padding:2px 6px;white-space:nowrap;background:${segColor}08">
+            <td style="font-size:10px;color:${segColor};font-weight:700;padding:1px 6px;white-space:nowrap;background:${segColor}08;border-right:1px solid var(--border);min-width:170px">
               📅 Planning
-              <span style="font-weight:400;color:var(--muted);margin-left:4px">${fmtDate(it.planStart)} → ${fmtDate(it.planEnd)} (${it.dur}hr)</span>
+              <span style="font-weight:400;color:var(--muted);margin-left:4px;font-size:9px">${fmtDate(it.planStart)}→${fmtDate(it.planEnd)} (${it.dur}hr)</span>
             </td>
             ${planCells}
           </tr>`;
 
         // ── Baris 2: REALISASI ────────────────────────────────
-        // Tiap hari yg ada dailyReport = 1 block, di dalamnya tulis % kumulatif hari itu
+        // Tiap hari ada dailyReport → blok solid dengan % kumulatif
         const realCells = dates.map((dt, idx) => {
-          const todayCol = dt === todayStr ? 'background:rgba(59,130,246,0.08);' : '';
+          const todayBg = dt === todayStr ? 'background:rgba(59,130,246,0.08);' : '';
 
           if (!reportDateSet.has(dt)) {
-            return `<td class="gantt-cell" style="${todayCol}"></td>`;
+            return `<td class="gantt-cell" style="${todayBg}padding:2px 0"></td>`;
           }
+
+          const cumQty    = calcCumulativeQtyUntil(it, dt);
+          const pctDay    = totalPlanQty > 0 ? Math.min(100, (cumQty / totalPlanQty * 100)) : 100;
+          const pctDayRnd = Math.round(pctDay);
+
+          // Cek terlambat: tanggal realisasi melewati planEnd
+          const isLate    = it.planEnd && dt > it.planEnd;
+          const barColor  = isLate ? 'var(--red)' : '#22c55e';
+
+          // Cek apakah awal/akhir blok untuk border-radius
+          const sortedDates = [...reportDateSet].sort();
+          const isFirst = dt === sortedDates[0];
+          const isLast  = dt === sortedDates[sortedDates.length - 1];
+          const br = isFirst && isLast ? '4px' : isFirst ? '4px 0 0 4px' : isLast ? '0 4px 4px 0' : '0';
 
           const report = sortedReports.find(r => r.date === dt);
           const qty    = report ? (report.qty || 0) : 0;
-          const cumQty = calcCumulativeQtyUntil(it, dt);
-          const pctDay = totalPlanQty > 0 ? Math.min(100, (cumQty / totalPlanQty * 100)) : 100;
-          const pctDayRnd = Math.round(pctDay);
 
-          const isF  = dt === firstRepDate;
-          const isL  = dt === lastRepDate;
-          const late = it.planEnd && dt > it.planEnd;
-          const col  = late ? 'var(--red)' : '#22c55e';
-          const br   = isF && isL ? '4px' : isF ? '4px 0 0 4px' : isL ? '0 4px 4px 0' : '0';
-
-          // Tulis % di dalam block — teks hanya muat kalau block cukup lebar (selalu tampil, ukuran kecil)
-          return `<td class="gantt-cell" style="${todayCol}">
+          return `<td class="gantt-cell" style="${todayBg}padding:2px 0">
             <div style="
               height:14px;
-              background:${col};
+              background:${barColor};
               border-radius:${br};
               display:flex;
               align-items:center;
@@ -683,28 +668,30 @@ function renderGantt() {
               overflow:hidden;
               box-sizing:border-box;
             " title="${fmtDate(dt)} | qty: ${qty} ${it.planUnit||''} | kumulatif: ${cumQty.toFixed(2)} (${pctDayRnd}%)">
-              <span style="font-size:7px;font-weight:800;color:#fff;line-height:1;white-space:nowrap;text-shadow:0 0 2px rgba(0,0,0,0.5)">${pctDayRnd}%</span>
+              <span style="font-size:7px;font-weight:800;color:#fff;line-height:1;white-space:nowrap;text-shadow:0 0 2px rgba(0,0,0,0.6)">${pctDayRnd}%</span>
             </div>
           </td>`;
         }).join('');
 
+        const firstRepDate = sortedReports.length ? sortedReports[0].date : null;
+        const lastRepDate  = sortedReports.length ? sortedReports[sortedReports.length-1].date : null;
         const hasReal = sortedReports.length > 0;
+
         tbodyRows += `
           <tr>
-            <td style="font-size:10px;color:${hasReal?'#22c55e':'var(--muted)'};font-weight:700;padding:2px 6px;white-space:nowrap;background:${hasReal?'rgba(34,197,94,0.06)':''}">
+            <td style="font-size:10px;color:${hasReal?'#22c55e':'var(--muted)'};font-weight:700;padding:1px 6px;white-space:nowrap;background:${hasReal?'rgba(34,197,94,0.05)':''};border-right:1px solid var(--border)">
               📊 Realisasi
-              <span style="font-weight:400;color:var(--muted);margin-left:4px">${hasReal ? fmtDate(firstRepDate)+' → '+(lastRepDate===firstRepDate?'':fmtDate(lastRepDate)) : '—'}</span>
+              <span style="font-weight:400;color:var(--muted);font-size:9px;margin-left:4px">${hasReal ? fmtDate(firstRepDate)+(lastRepDate!==firstRepDate?' → '+fmtDate(lastRepDate):'') : '—'}</span>
             </td>
             ${realCells}
           </tr>`;
       });
 
-      // ── Render card aktivitas ────────────────────────────────
       cardsHtml += `
-        <div class="gantt-act-card" style="margin-left:20px;margin-bottom:12px">
-          <div class="gantt-act-card-title" style="border-left-color:${segColor}">
-            <span style="color:${segColor};margin-right:6px">🃏</span>
-            <span style="font-weight:700">${act.name}</span>
+        <div style="margin-left:20px;margin-bottom:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+          <div style="padding:8px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;background:${segColor}08">
+            <span style="color:${segColor};font-size:14px">🃏</span>
+            <span style="font-weight:700;font-size:13px">${act.name}</span>
             <span style="font-size:11px;color:var(--muted);margin-left:auto">${actItems.length} item</span>
           </div>
           <div class="gantt-wrap">
@@ -712,8 +699,8 @@ function renderGantt() {
               <thead>
                 <tr>
                   <th class="gantt-label" rowspan="2" style="text-align:left;vertical-align:bottom;min-width:150px;max-width:200px">Item Pekerjaan</th>
-                  <th rowspan="2" style="min-width:50px;text-align:center">Prog</th>
-                  <th rowspan="2" style="min-width:180px;text-align:left">Tipe / Rentang</th>
+                  <th rowspan="2" style="min-width:48px;text-align:center">Prog</th>
+                  <th rowspan="2" style="min-width:170px;text-align:left;border-right:1px solid var(--border)">Tipe</th>
                   ${monthHeader}
                 </tr>
                 <tr>${dayHeader}</tr>
@@ -725,37 +712,38 @@ function renderGantt() {
     });
   });
 
+  // Legenda
   const todayInRange = todayStr >= minDate && todayStr <= maxDate;
-
-  el.innerHTML = `
-    ${cardsHtml}
-    <div style="margin-top:16px;display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--muted);padding:10px 0;border-top:1px solid var(--border)">
+  cardsHtml += `
+    <div style="margin-top:16px;display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--muted);padding:12px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">
       <strong style="color:var(--text)">Legenda:</strong>
       <div style="display:flex;align-items:center;gap:5px">
-        <div style="width:28px;height:14px;background:rgba(59,130,246,0.2);border:2px solid #3b82f6;border-radius:3px"></div>
-        <span>Planning (Rencana)</span>
+        <div style="width:28px;height:14px;border:2px solid #3b82f6;background:rgba(59,130,246,0.15);border-radius:3px"></div>
+        <span>Planning</span>
       </div>
       <div style="display:flex;align-items:center;gap:5px">
         <div style="width:28px;height:14px;background:#22c55e;border-radius:3px;display:flex;align-items:center;justify-content:center">
           <span style="font-size:7px;color:#fff;font-weight:800">35%</span>
         </div>
-        <span>Realisasi Tepat/Lebih Awal (angka = % kumulatif)</span>
+        <span>Realisasi (tepat/awal)</span>
       </div>
       <div style="display:flex;align-items:center;gap:5px">
         <div style="width:28px;height:14px;background:var(--red);border-radius:3px;display:flex;align-items:center;justify-content:center">
           <span style="font-size:7px;color:#fff;font-weight:800">80%</span>
         </div>
-        <span>Realisasi Terlambat (melewati tanggal rencana selesai)</span>
+        <span>Realisasi Terlambat</span>
       </div>
       ${todayInRange ? `<div style="display:flex;align-items:center;gap:5px">
-        <div style="width:28px;height:14px;background:rgba(59,130,246,0.2);border:1px solid var(--blue);border-radius:3px"></div>
+        <div style="width:28px;height:14px;background:rgba(59,130,246,0.25);border:1px solid var(--blue);border-radius:3px"></div>
         <span>Hari Ini</span>
       </div>` : ''}
-      <span style="margin-left:auto;font-size:10px">💡 Hover bar untuk detail qty & kumulatif</span>
+      <span style="margin-left:auto;font-size:10px">💡 Hover bar realisasi untuk detail qty & kumulatif</span>
     </div>`;
+
+  el.innerHTML = cardsHtml;
 }
 
-// ─── Helper: hitung kumulatif qty dari dailyReports ─────────────
+// ─── Helper: kumulatif qty ───────────────────────────────────────
 function calcCumulativeQty(it) {
   return (it.dailyReports||[]).reduce((sum, r) => sum + (r.qty||0), 0);
 }
@@ -841,7 +829,6 @@ function renderCost() {
             ${mRows}
           </table></div>
           <button class="btn btn-ghost mt8" onclick="addM(${it.id})" style="font-size:11px;padding:4px 10px">+ Material</button>
-
           ${it.material && it.material.length ? `
           <div class="sub-label">📦 Realisasi Material</div>
           <div class="table-wrap"><table>
@@ -886,7 +873,9 @@ window.updM = (id,mi,f,v) => {
   saveProj(); refreshCostKPI();
 };
 
-// ─── REALISASI — Report Harian per Aktivitas ────────────────────
+// ─── REALISASI — Report Harian per Item ────────────────────────
+// User bisa set "Tanggal Realisasi Dimulai" → itu jadi default tanggal
+// pertama form tambah report. Bar Gantt realisasi = dari daily report.
 function renderRealisasi() {
   const el = document.getElementById('realisasi-sections');
   if (!proj.items.length) {
@@ -913,26 +902,18 @@ function renderRealisasi() {
         if (!it.dailyReports) it.dailyReports = [];
         const unitOpts = UNITS.map(u => `<option value="${u}" ${(it.planUnit||'m²')===u?'selected':''}>${u}</option>`).join('');
 
-        // Kumulatif qty dari dailyReports
         const cumulReal = calcCumulativeQty(it);
-        const pct = (it.planQty||0) > 0
-          ? Math.min(100, (cumulReal / it.planQty * 100)).toFixed(1)
-          : 0;
-        const pctNum = parseFloat(pct);
-        const pctColor = pctNum>=100?'var(--green)':pctNum>=50?'var(--yellow)':'var(--accent)';
+        const pct       = (it.planQty||0) > 0 ? Math.min(100, (cumulReal / it.planQty * 100)).toFixed(1) : 0;
+        const pctNum    = parseFloat(pct);
+        const pctColor  = pctNum>=100?'var(--green)':pctNum>=50?'var(--yellow)':'var(--accent)';
 
-        // Keterlambatan
-        const late = it.realisasiStart && it.planStart ? diffDays(it.planStart, it.realisasiStart) : 0;
-        const lateHtml = late > 0
-          ? `<span class="late-badge">+${late} hr terlambat</span>`
-          : late < 0
-            ? `<span class="early-badge">${Math.abs(late)} hr lebih awal</span>`
-            : it.realisasiStart ? `<span style="color:var(--green);font-size:11px">✅ Tepat waktu</span>` : '';
+        // Default tanggal form = reportStartDate > realisasiStart > today
+        const defaultReportDate = it.reportStartDate || it.realisasiStart || new Date().toISOString().slice(0,10);
 
-        // Rows report harian
         const reportRows = it.dailyReports.map((r, ri) => {
           const runningQty = it.dailyReports.slice(0, ri+1).reduce((s,x)=>s+(x.qty||0),0);
           const runningPct = (it.planQty||0)>0 ? Math.min(100,(runningQty/it.planQty*100)).toFixed(1) : 0;
+          const pctColRow  = parseFloat(runningPct)>=100?'var(--green)':parseFloat(runningPct)>=50?'var(--yellow)':'var(--accent)';
           return `<tr>
             <td class="mono" style="white-space:nowrap">${fmtDate(r.date)}</td>
             <td>
@@ -951,9 +932,9 @@ function renderRealisasi() {
             <td>
               <div style="display:flex;align-items:center;gap:6px">
                 <div class="prog-bar" style="width:80px">
-                  <div class="prog-fill" style="width:${runningPct}%;background:${parseFloat(runningPct)>=100?'var(--green)':parseFloat(runningPct)>=50?'var(--yellow)':'var(--accent)'}"></div>
+                  <div class="prog-fill" style="width:${runningPct}%;background:${pctColRow}"></div>
                 </div>
-                <span class="mono" style="font-size:11px;color:${parseFloat(runningPct)>=100?'var(--green)':parseFloat(runningPct)>=50?'var(--yellow)':'var(--accent)'}">${runningPct}%</span>
+                <span class="mono" style="font-size:11px;color:${pctColRow}">${runningPct}%</span>
               </div>
             </td>
             <td><button class="btn btn-danger" onclick="delReport(${it.id},${ri})">✕</button></td>
@@ -967,8 +948,8 @@ function renderRealisasi() {
             <span style="font-size:11px;color:var(--muted)">${fmtDate(it.planStart)} – ${fmtDate(it.planEnd)}</span>
           </div>
 
-          <!-- Info tanggal & Planning Satuan -->
-          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-end">
+          <!-- Konfigurasi tanggal & satuan -->
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;align-items:flex-end;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
             <div>
               <div class="sub-label" style="margin-top:0">Rencana Mulai</div>
               <span class="mono" style="font-size:13px">${fmtDate(it.planStart)}</span>
@@ -979,6 +960,14 @@ function renderRealisasi() {
                 onchange="updRealisasiStart(${it.id},this.value)" style="width:160px">
             </div>
             <div id="late-badge-${it.id}">${lateBadgeHtml(it)}</div>
+            <div>
+              <div class="sub-label" style="margin-top:0">🗓️ Tanggal Mulai Report Harian</div>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input type="date" id="report-start-date-${it.id}" value="${it.reportStartDate||''}"
+                  onchange="updReportStartDate(${it.id},this.value)" style="width:160px">
+                <span style="font-size:10px;color:var(--muted)">← awal input laporan harian</span>
+              </div>
+            </div>
             <div style="margin-left:auto">
               <div class="sub-label" style="margin-top:0">Planning Satuan</div>
               <div style="display:flex;gap:6px;align-items:center">
@@ -1002,10 +991,10 @@ function renderRealisasi() {
 
           <!-- Form tambah report harian -->
           <div class="sub-label">📝 Report Harian</div>
-          <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">
+          <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px;padding:10px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
             <div class="form-group" style="min-width:150px;flex:0">
-              <label>Tanggal</label>
-              <input type="date" id="new-report-date-${it.id}" value="${new Date().toISOString().slice(0,10)}">
+              <label>Tanggal Report</label>
+              <input type="date" id="new-report-date-${it.id}" value="${defaultReportDate}">
             </div>
             <div class="form-group" style="flex:2;min-width:200px">
               <label>Deskripsi Pekerjaan</label>
@@ -1028,7 +1017,7 @@ function renderRealisasi() {
               <tr><th>Tanggal</th><th>Deskripsi</th><th>Qty Hari Ini</th><th>Progress Kumulatif</th><th></th></tr>
               ${reportRows}
             </table>
-          </div>` : `<div style="color:var(--muted);font-size:12px;padding:12px 0;text-align:center">Belum ada report. Tambahkan report harian di atas.</div>`}
+          </div>` : `<div style="color:var(--muted);font-size:12px;padding:12px 0;text-align:center">Belum ada report. Tambahkan di atas. Tanggal default = tanggal realisasi dimulai.</div>`}
         </div>`;
       });
     });
@@ -1048,16 +1037,12 @@ window.addReport = (itemId) => {
   if (!date) return alert('Masukkan tanggal report!');
   if (!it.dailyReports) it.dailyReports = [];
 
-  // Cek duplikat tanggal
   if (it.dailyReports.find(r => r.date === date)) {
     return alert('Sudah ada report untuk tanggal ini. Hapus dulu atau edit langsung di tabel.');
   }
 
   it.dailyReports.push({ date, desc, qty });
-  // Sort by date
   it.dailyReports.sort((a, b) => a.date.localeCompare(b.date));
-
-  // Update realisasiQty = total dari dailyReports
   it.realisasiQty = calcCumulativeQty(it);
 
   // Set realisasiStart ke tanggal pertama report jika belum ada
@@ -1066,8 +1051,12 @@ window.addReport = (itemId) => {
     it.realisasiEnd   = addDays(it.realisasiStart, it.dur - 1);
   }
 
+  // Maju ke hari berikutnya untuk form selanjutnya
+  const nextDate = addDays(date, 1);
   document.getElementById(`new-report-desc-${itemId}`).value = '';
   document.getElementById(`new-report-qty-${itemId}`).value  = '0';
+  const dateEl = document.getElementById(`new-report-date-${itemId}`);
+  if (dateEl) dateEl.value = nextDate;
 
   saveProj();
   renderRealisasi();
@@ -1084,10 +1073,9 @@ window.updReport = (itemId, ri, field, val) => {
     it.dailyReports[ri][field] = val;
   }
   saveProj();
-  // Re-render hanya progress display
   const cumulReal = calcCumulativeQty(it);
-  const pct = (it.planQty||0)>0 ? Math.min(100,(cumulReal/it.planQty*100)).toFixed(1) : 0;
-  const pctColor = parseFloat(pct)>=100?'var(--green)':parseFloat(pct)>=50?'var(--yellow)':'var(--accent)';
+  const pct       = (it.planQty||0)>0 ? Math.min(100,(cumulReal/it.planQty*100)).toFixed(1) : 0;
+  const pctColor  = parseFloat(pct)>=100?'var(--green)':parseFloat(pct)>=50?'var(--yellow)':'var(--accent)';
   const disp = document.getElementById(`pct-display-${itemId}`);
   const bar  = document.getElementById(`pct-bar-${itemId}`);
   if (disp) { disp.textContent = pct+'%'; disp.style.color = pctColor; }
@@ -1104,11 +1092,11 @@ window.delReport = (itemId, ri) => {
   renderRealisasi();
 };
 
-window.updPlanQty  = (id, v) => {
+window.updPlanQty = (id, v) => {
   const it = proj.items.find(i=>i.id===id);
   it.planQty = parseFloat(v)||0;
   it.realisasiQty = calcCumulativeQty(it);
-  const pct = it.planQty>0 ? Math.min(100,(it.realisasiQty/it.planQty*100)).toFixed(1) : 0;
+  const pct      = it.planQty>0 ? Math.min(100,(it.realisasiQty/it.planQty*100)).toFixed(1) : 0;
   const pctColor = parseFloat(pct)>=100?'var(--green)':parseFloat(pct)>=50?'var(--yellow)':'var(--accent)';
   const disp = document.getElementById(`pct-display-${id}`);
   const bar  = document.getElementById(`pct-bar-${id}`);
@@ -1116,18 +1104,10 @@ window.updPlanQty  = (id, v) => {
   if (bar)  { bar.style.width = pct+'%'; bar.style.background = pctColor; }
   saveProj();
 };
-window.updPlanUnit = (id, v) => {
-  const it = proj.items.find(i=>i.id===id);
-  it.planUnit = v;
-  saveProj();
-};
-window.updRealQty  = (id, v) => {
-  const it = proj.items.find(i=>i.id===id);
-  it.realisasiQty = parseFloat(v)||0;
-  saveProj();
-};
-window.updCA   = (id, v) => { const it=proj.items.find(i=>i.id===id); it.costActual=parseFloat(v)||0; saveProj(); };
-window.updMA   = (id, mi, v) => {
+window.updPlanUnit = (id, v) => { const it=proj.items.find(i=>i.id===id); it.planUnit=v; saveProj(); };
+window.updRealQty  = (id, v) => { const it=proj.items.find(i=>i.id===id); it.realisasiQty=parseFloat(v)||0; saveProj(); };
+window.updCA       = (id, v) => { const it=proj.items.find(i=>i.id===id); it.costActual=parseFloat(v)||0; saveProj(); };
+window.updMA       = (id, mi, v) => {
   const it = proj.items.find(i=>i.id===id);
   if (!it.materialActual) it.materialActual = [];
   if (!it.materialActual[mi]) it.materialActual[mi] = {};
@@ -1137,14 +1117,12 @@ window.updMA   = (id, mi, v) => {
 
 // ─── DEVIASI ────────────────────────────────────────────────────
 function renderDeviasi() {
-  // Hitung average progress berdasarkan volume planning proyek
   const volPlan = proj.volumePlanning || 0;
   let totalRealQty = 0;
   proj.items.forEach(i => { totalRealQty += calcCumulativeQty(i); });
   const avgProg = volPlan > 0
     ? Math.min(100, (totalRealQty / volPlan * 100)).toFixed(1)
     : (() => {
-        // Fallback: avg dari item
         let tPlan = 0, tReal = 0;
         proj.items.forEach(i => { tPlan += (i.planQty||0); tReal += calcCumulativeQty(i); });
         return tPlan > 0 ? Math.min(100, (tReal/tPlan*100)).toFixed(1) : 0;
@@ -1187,44 +1165,35 @@ function renderDeviasi() {
       <div class="kpi-sub">${costDev<=0?'✅ Under Budget':'⚠️ Over Budget'}</div>
     </div>`;
 
-  // Hitung total planQty seluruh proyek (untuk bobot per aktivitas)
   const totalPlanQtyAll = proj.items.reduce((s, i) => s + (i.planQty||0), 0);
 
-  // Tabel Progress dengan kolom Bobot + Avg Progress per aktivitas
   let ph = `<div class="table-wrap"><table>
     <tr>
       <th>Segmen</th><th>Aktivitas</th><th>Item</th>
       <th>Rencana Mulai</th><th>Realisasi Mulai</th><th>Keterlambatan</th>
       <th>Plan Qty</th><th>Real Qty</th><th>Progress</th>
-      <th>Bobot Aktivitas</th><th>Avg Progress Item</th><th>Status</th>
+      <th>Bobot Aktivitas</th><th>Avg Progress Aktivitas</th><th>Status</th>
     </tr>`;
 
   proj.segments.forEach(seg => {
     const si = proj.segments.indexOf(seg);
     proj.activities.filter(a=>a.segId===seg.id).forEach(act => {
-      const actItems = proj.items.filter(i=>i.actId===act.id);
-
-      // Bobot aktivitas = total planQty aktivitas ini / total planQty seluruh proyek
-      const actPlanQtySum = actItems.reduce((s,i)=>s+(i.planQty||0),0);
-      const bobot = totalPlanQtyAll > 0 ? (actPlanQtySum / totalPlanQtyAll * 100).toFixed(1) : '—';
-
-      // Avg Progress aktivitas ini = total realQty aktivitas / total planQty aktivitas
-      const actRealQtySum = actItems.reduce((s,i)=>s+calcCumulativeQty(i),0);
-      const actAvgProg = actPlanQtySum > 0
+      const actItems       = proj.items.filter(i=>i.actId===act.id);
+      const actPlanQtySum  = actItems.reduce((s,i)=>s+(i.planQty||0),0);
+      const bobot          = totalPlanQtyAll > 0 ? (actPlanQtySum / totalPlanQtyAll * 100).toFixed(1) : '—';
+      const actRealQtySum  = actItems.reduce((s,i)=>s+calcCumulativeQty(i),0);
+      const actAvgProg     = actPlanQtySum > 0
         ? Math.min(100, (actRealQtySum / actPlanQtySum * 100)).toFixed(1)
         : '—';
 
       actItems.forEach((it, iti) => {
-        const late = it.realisasiStart && it.planStart ? diffDays(it.planStart, it.realisasiStart) : null;
+        const late    = it.realisasiStart && it.planStart ? diffDays(it.planStart, it.realisasiStart) : null;
         const realQty = calcCumulativeQty(it);
-        const pct = (it.planQty||0) > 0 ? Math.min(100, (realQty/it.planQty*100)).toFixed(1) : 0;
+        const pct     = (it.planQty||0) > 0 ? Math.min(100, (realQty/it.planQty*100)).toFixed(1) : 0;
         const lateCell = late === null ? '—'
           : late > 0 ? `<span class="dev-neg">+${late} hari</span>`
           : late < 0 ? `<span class="dev-pos">${late} hari</span>`
           : `<span class="dev-zero">Tepat</span>`;
-
-        // Bobot & AvgProg hanya di baris pertama tiap aktivitas
-        const isFirstItem = iti === 0;
 
         ph += `<tr>
           <td><span class="c${si%6}" style="font-weight:600">${seg.name}</span></td>
@@ -1236,10 +1205,9 @@ function renderDeviasi() {
           <td class="mono">${it.planQty||0} ${it.planUnit||'—'}</td>
           <td class="mono">${realQty.toFixed(2)} ${it.planUnit||'—'}</td>
           <td class="mono" style="color:${parseFloat(pct)>=100?'var(--green)':parseFloat(pct)>0?'var(--yellow)':'var(--muted)'}">${pct}%</td>
-          ${isFirstItem
+          ${iti === 0
             ? `<td class="mono" rowspan="${actItems.length}" style="vertical-align:middle;font-weight:700;color:var(--yellow);background:rgba(245,158,11,0.05)">
                 ${bobot !== '—' ? bobot+'%' : '—'}
-                <div style="font-size:10px;color:var(--muted);margin-top:2px">${fmtRp(actPlanQtySum)} unit</div>
               </td>
               <td rowspan="${actItems.length}" style="vertical-align:middle;background:rgba(59,130,246,0.05)">
                 <div style="text-align:center">
