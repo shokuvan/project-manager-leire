@@ -506,7 +506,7 @@ function renderItemsTable() {
   });
 }
 
-// ─── GANTT — Per Aktivitas Card, Planning atas, Realisasi bawah ─
+// ─── GANTT — Per Aktivitas Card, Planning + Realisasi satu tabel ─
 function renderGantt() {
   const el = document.getElementById('gantt-container');
   const itemsWithDates = proj.items.filter(i => i.planStart);
@@ -516,182 +516,206 @@ function renderGantt() {
     return;
   }
 
-  // Hitung rentang tanggal global untuk semua chart
-  const allStarts = itemsWithDates.map(i => i.planStart).concat(
-    proj.items.filter(i=>i.realisasiStart).map(i=>i.realisasiStart),
-    proj.items.flatMap(i=>(i.dailyReports||[]).map(r=>r.date).filter(Boolean))
-  );
-  const allEnds = itemsWithDates.map(i => i.planEnd).concat(
-    proj.items.filter(i=>i.realisasiEnd).map(i=>i.realisasiEnd)
-  );
+  // Hitung rentang tanggal global — gabungan planning, realisasi, dan dailyReports
+  const allDates = [];
+  proj.items.forEach(i => {
+    if (i.planStart) allDates.push(i.planStart);
+    if (i.planEnd)   allDates.push(i.planEnd);
+    if (i.realisasiStart) allDates.push(i.realisasiStart);
+    if (i.realisasiEnd)   allDates.push(i.realisasiEnd);
+    (i.dailyReports||[]).forEach(r => { if (r.date) allDates.push(r.date); });
+  });
 
-  const minDate  = allStarts.sort()[0];
-  const maxDate  = allEnds.sort().reverse()[0];
+  if (!allDates.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">📅</div>Belum ada data.</div>';
+    return;
+  }
+
+  const sortedAll = allDates.slice().sort();
+  const minDate   = sortedAll[0];
+  const maxDate   = sortedAll[sortedAll.length - 1];
   const totalDays = diffDays(minDate, maxDate) + 1;
 
   const dates = [];
   for (let d = 0; d < totalDays; d++) dates.push(addDays(minDate, d));
 
-  // Header bulan + hari (shared)
+  // ─── Header bulan + hari ───────────────────────────────────────
   const months = [];
   let lastMonth = '';
   dates.forEach((dt, idx) => {
     const mo = dt.slice(0, 7);
     if (mo !== lastMonth) { months.push({ mo, start: idx, count: 0 }); lastMonth = mo; }
-    months[months.length-1].count++;
+    months[months.length - 1].count++;
   });
 
   const monthHeader = months.map(m => {
     const d = new Date(m.mo + '-01');
-    const label = d.toLocaleDateString('id-ID', { month:'short', year:'numeric' });
-    return `<th colspan="${m.count}" style="text-align:center;border-left:1px solid var(--border);color:var(--text);font-size:11px;background:var(--surface2)">${label}</th>`;
+    const label = d.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+    return `<th colspan="${m.count}" style="text-align:center;border-left:2px solid var(--border);color:var(--text);font-size:11px;background:var(--surface2);padding:4px 2px;white-space:nowrap">${label}</th>`;
   }).join('');
 
   const dayHeader = dates.map(dt => {
     const d = new Date(dt + 'T00:00:00');
     const isFirst   = d.getDate() === 1;
     const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-    return `<th style="min-width:26px;text-align:center;font-size:10px;${isFirst?'border-left:1px solid var(--border)':''}${isWeekend?';color:#4a5568':''}">
-      ${d.getDate()}
-    </th>`;
+    const today     = new Date().toISOString().slice(0, 10);
+    const isToday   = dt === today;
+    return `<th style="min-width:24px;width:24px;text-align:center;font-size:9px;padding:2px 0;
+      ${isFirst ? 'border-left:2px solid var(--border);' : ''}
+      ${isWeekend ? 'color:var(--muted);background:rgba(0,0,0,0.04);' : ''}
+      ${isToday ? 'background:rgba(59,130,246,0.18);color:var(--blue);font-weight:700;' : ''}
+    ">${d.getDate()}</th>`;
   }).join('');
 
-  // Build cards per aktivitas
+  // ─── Build card per aktivitas ──────────────────────────────────
   let cardsHtml = '';
 
   proj.segments.forEach((seg, si) => {
-    const segColor = HEX[si % 6];
-    const segActs  = proj.activities.filter(a => a.segId === seg.id);
-    const segItemsAll = proj.items.filter(i => segActs.some(a => a.id === i.actId) && i.planStart);
-    if (!segItemsAll.length) return;
+    const segColor  = HEX[si % 6];
+    const segActs   = proj.activities.filter(a => a.segId === seg.id);
+    const segHasItems = proj.items.some(i => segActs.some(a => a.id === i.actId) && i.planStart);
+    if (!segHasItems) return;
 
     // Segmen header
-    cardsHtml += `<div class="gantt-seg-label" style="border-left-color:${segColor}">
-      <span style="color:${segColor}">${seg.name}</span>
-    </div>`;
+    cardsHtml += `
+      <div class="gantt-seg-label" style="border-left-color:${segColor};margin-top:12px">
+        <span style="color:${segColor};font-weight:700;font-size:13px">📦 ${seg.name}</span>
+      </div>`;
 
-    segActs.forEach((act, ai) => {
+    segActs.forEach(act => {
       const actItems = proj.items.filter(i => i.actId === act.id && i.planStart);
       if (!actItems.length) return;
 
-      // Hitung progress kumulatif dari dailyReports per item
-      // Untuk realisasi bar: kumpulkan semua tanggal report tiap item
-      const planRows = actItems.map(it => {
+      // Bangun rows — tiap item punya 2 baris: Planning (kuning) dan Realisasi (hijau/merah)
+      let tbodyRows = '';
+
+      actItems.forEach((it, iti) => {
         const planStartIdx = diffDays(minDate, it.planStart);
-        const planEndIdx   = planStartIdx + it.dur - 1;
-        const cells = dates.map((dt, idx) => {
-          const inPlan   = idx >= planStartIdx && idx <= planEndIdx;
-          const isFirst  = idx === planStartIdx;
-          const isLast   = idx === planEndIdx;
+        const planEndIdx   = planStartIdx + (it.dur || 1) - 1;
+
+        // Kumpulkan set tanggal yg punya dailyReport untuk item ini
+        const reportDates = new Set((it.dailyReports || []).map(r => r.date).filter(Boolean));
+        const sortedRepDates = Array.from(reportDates).sort();
+
+        const totalPlanQty = it.planQty || 0;
+        const cumulReal    = calcCumulativeQty(it);
+        const pct          = totalPlanQty > 0 ? Math.min(100, Math.round(cumulReal / totalPlanQty * 100)) : (reportDates.size > 0 ? 100 : 0);
+
+        // ── ROW PLANNING ──────────────────────────────────────────
+        const planCells = dates.map((dt, idx) => {
+          const inPlan  = idx >= planStartIdx && idx <= planEndIdx;
           if (!inPlan) return `<td class="gantt-cell"></td>`;
-          return `<td class="gantt-cell"><div class="gantt-bar-plan${isFirst?' gantt-bar-first':''}${isLast?' gantt-bar-last':''}" style="background:${segColor}33;border:2px solid ${segColor};${isFirst?'border-radius:4px 0 0 4px':''}${isLast?'border-radius:0 4px 4px 0':''}${(isFirst&&isLast)?'border-radius:4px':''};"></div></td>`;
+          const isF = idx === planStartIdx;
+          const isL = idx === planEndIdx;
+          const r   = isF && isL ? '4px' : isF ? '4px 0 0 4px' : isL ? '0 4px 4px 0' : '0';
+          return `<td class="gantt-cell">
+            <div style="height:10px;background:${segColor}28;border-top:2px solid ${segColor};border-bottom:2px solid ${segColor};
+              ${isF?'border-left:2px solid '+segColor+';':''}
+              ${isL?'border-right:2px solid '+segColor+';':''}
+              border-radius:${r};box-sizing:border-box;"></div>
+          </td>`;
         }).join('');
 
-        const totalPlanQty = it.planQty || 0;
-        const cumulReal = calcCumulativeQty(it);
-        const pct = totalPlanQty > 0 ? Math.min(100, Math.round(cumulReal / totalPlanQty * 100)) : 0;
+        const pctColor = pct >= 100 ? 'var(--green)' : pct > 0 ? 'var(--yellow)' : 'var(--border)';
+        tbodyRows += `
+          <tr style="border-top:${iti > 0 ? '2px solid var(--border)' : 'none'}">
+            <td class="gantt-label" title="${it.name}" rowspan="2" style="vertical-align:middle;font-weight:600;border-right:1px solid var(--border)">
+              ${it.name}
+            </td>
+            <td style="text-align:center;font-size:10px;color:var(--yellow);white-space:nowrap;padding:2px 4px">📅 ${it.dur}hr</td>
+            <td style="text-align:center;min-width:52px;padding:2px 4px">
+              <div class="prog-bar" style="width:40px;display:inline-block;vertical-align:middle">
+                <div class="prog-fill" style="width:${pct}%;background:${pctColor}"></div>
+              </div>
+              <span style="font-size:9px;color:${pctColor};display:block">${pct}%</span>
+            </td>
+            ${planCells}
+          </tr>`;
 
-        return `<tr>
-          <td class="gantt-label" title="${it.name}">${it.name}</td>
-          <td class="mono" style="text-align:center;font-size:11px;white-space:nowrap">${it.dur}hr</td>
-          <td style="text-align:center;min-width:50px">
-            <div class="prog-bar" style="width:40px;display:inline-block">
-              <div class="prog-fill" style="width:${pct}%;background:${pct===100?'var(--green)':pct>0?'var(--yellow)':'var(--border)'}"></div>
-            </div>
-            <span class="mono" style="font-size:10px;color:var(--muted)">${pct}%</span>
-          </td>
-          ${cells}
-        </tr>`;
-      }).join('');
+        // ── ROW REALISASI ─────────────────────────────────────────
+        const realCells = dates.map((dt, idx) => {
+          if (!reportDates.has(dt)) return `<td class="gantt-cell"></td>`;
 
-      // Realisasi rows — per item, bar per hari berdasarkan dailyReports
-      const realRows = actItems.map(it => {
-        const totalPlanQty = it.planQty || 0;
-        const cells = dates.map((dt, idx) => {
-          // Cek apakah ada report di tanggal ini
-          const report = (it.dailyReports||[]).find(r => r.date === dt);
-          if (!report) return `<td class="gantt-cell"></td>`;
+          const report = (it.dailyReports || []).find(r => r.date === dt);
+          const qty    = report ? (report.qty || 0) : 0;
+          const cumQty = calcCumulativeQtyUntil(it, dt);
+          const pctDay = totalPlanQty > 0 ? Math.min(100, cumQty / totalPlanQty * 100) : 0;
 
-          // Hitung kumulatif sampai hari ini untuk % warna
-          const cumQtyUpToDay = calcCumulativeQtyUntil(it, dt);
-          const pctDay = totalPlanQty > 0 ? Math.min(100, cumQtyUpToDay / totalPlanQty * 100) : 0;
-
-          // Apakah ini hari pertama atau terakhir ada report?
-          const sortedDates = (it.dailyReports||[]).map(r=>r.date).sort();
-          const isFirstR  = dt === sortedDates[0];
-          const isLastR   = dt === sortedDates[sortedDates.length-1];
-
-          // Warna: merah kalau di luar planEnd, hijau kalau ontime
+          const isF  = dt === sortedRepDates[0];
+          const isL  = dt === sortedRepDates[sortedRepDates.length - 1];
           const late = it.planEnd && dt > it.planEnd;
-          const color = late ? 'var(--red)' : 'var(--green)';
+          const col  = late ? 'var(--red)' : 'var(--green)';
+          const r    = isF && isL ? '4px' : isF ? '4px 0 0 4px' : isL ? '0 4px 4px 0' : '0';
 
-          return `<td class="gantt-cell"><div class="gantt-bar-real${isFirstR?' gantt-bar-first':''}${isLastR?' gantt-bar-last':''}" style="background:${color};opacity:0.8;${isFirstR?'border-radius:4px 0 0 4px':''}${isLastR?'border-radius:0 4px 4px 0':''}${(isFirstR&&isLastR)?'border-radius:4px':''};" title="${pctDay.toFixed(1)}% kumulatif"></div></td>`;
+          return `<td class="gantt-cell">
+            <div style="height:10px;background:${col};border-radius:${r};opacity:0.85;box-sizing:border-box;" 
+              title="${fmtDate(dt)} | qty: ${qty} | kumulatif: ${cumQty.toFixed(2)} (${pctDay.toFixed(1)}%)"></div>
+          </td>`;
         }).join('');
 
-        const realisasiLabel = it.realisasiStart
-          ? `<span style="font-size:10px;color:var(--muted)">${fmtDate(it.realisasiStart)}</span>`
-          : `<span style="font-size:10px;color:var(--muted)">—</span>`;
+        const hasReal = reportDates.size > 0;
+        tbodyRows += `
+          <tr>
+            <td style="text-align:center;font-size:10px;color:${hasReal?'var(--green)':'var(--muted)'};white-space:nowrap;padding:2px 4px">
+              📊 ${hasReal ? fmtDate(sortedRepDates[0]).slice(0, 6) : '—'}
+            </td>
+            <td style="padding:2px 4px"></td>
+            ${realCells}
+          </tr>`;
+      });
 
-        return `<tr>
-          <td class="gantt-label" style="color:var(--muted);font-size:11px;font-style:italic">↳ real: ${it.name}</td>
-          <td class="mono" style="text-align:center;font-size:10px;color:var(--muted)">${it.realisasiStart ? fmtDate(it.realisasiStart).slice(0,6) : '—'}</td>
-          <td></td>
-          ${cells}
-        </tr>`;
-      }).join('');
-
-      cardsHtml += `<div class="gantt-act-card">
-        <div class="gantt-act-card-title" style="border-left-color:${segColor}">
-          <span style="color:${segColor};font-size:11px">▸</span>
-          <span style="font-weight:700">${act.name}</span>
-          <span style="font-size:11px;color:var(--muted);margin-left:auto">${actItems.length} item</span>
-        </div>
-
-        <!-- Planning rows -->
-        <div style="font-size:10px;font-weight:700;color:var(--yellow);text-transform:uppercase;letter-spacing:0.5px;padding:4px 8px;background:rgba(245,158,11,0.07);border-bottom:1px solid var(--border)">📅 Planning</div>
-        <div class="gantt-wrap">
-          <table class="gantt-table">
-            <thead>
-              <tr>
-                <th class="gantt-label" rowspan="2" style="text-align:left;vertical-align:bottom">Item Pekerjaan</th>
-                <th rowspan="2" style="min-width:36px">Dur</th>
-                <th rowspan="2" style="min-width:60px">Progress</th>
-                ${monthHeader}
-              </tr>
-              <tr>${dayHeader}</tr>
-            </thead>
-            <tbody>${planRows}</tbody>
-          </table>
-        </div>
-
-        <!-- Realisasi rows -->
-        <div style="font-size:10px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:0.5px;padding:4px 8px;background:rgba(59,130,246,0.07);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">📊 Realisasi (Report Harian)</div>
-        <div class="gantt-wrap">
-          <table class="gantt-table">
-            <thead>
-              <tr>
-                <th class="gantt-label" rowspan="2" style="text-align:left;vertical-align:bottom">Item</th>
-                <th rowspan="2" style="min-width:36px">Mulai</th>
-                <th rowspan="2" style="min-width:60px"></th>
-                ${monthHeader}
-              </tr>
-              <tr>${dayHeader}</tr>
-            </thead>
-            <tbody>${realRows}</tbody>
-          </table>
-        </div>
-      </div>`;
+      // ─── Satu tabel per aktivitas ──────────────────────────────
+      cardsHtml += `
+        <div class="gantt-act-card" style="margin-left:16px">
+          <div class="gantt-act-card-title" style="border-left-color:${segColor}">
+            <span style="color:${segColor};font-size:12px">🃏</span>
+            <span style="font-weight:700">${act.name}</span>
+            <span style="font-size:11px;color:var(--muted);margin-left:auto">${actItems.length} item</span>
+          </div>
+          <div class="gantt-wrap">
+            <table class="gantt-table">
+              <thead>
+                <tr>
+                  <th class="gantt-label" rowspan="2" style="text-align:left;vertical-align:bottom;min-width:140px;max-width:180px">Item Pekerjaan</th>
+                  <th rowspan="2" style="min-width:44px;text-align:center">Tipe</th>
+                  <th rowspan="2" style="min-width:52px;text-align:center">Prog</th>
+                  ${monthHeader}
+                </tr>
+                <tr>${dayHeader}</tr>
+              </thead>
+              <tbody>${tbodyRows}</tbody>
+            </table>
+          </div>
+        </div>`;
     });
   });
 
+  // Legend + marker hari ini
+  const todayStr   = new Date().toISOString().slice(0, 10);
+  const todayInRange = todayStr >= minDate && todayStr <= maxDate;
+
   el.innerHTML = `
     ${cardsHtml}
-    <div style="margin-top:14px;display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--muted)">
-      <div style="display:flex;align-items:center;gap:5px"><div style="width:20px;height:8px;background:rgba(59,130,246,0.25);border:2px solid #3b82f6;border-radius:2px"></div>Rencana</div>
-      <div style="display:flex;align-items:center;gap:5px"><div style="width:20px;height:8px;background:var(--green);border-radius:2px;opacity:0.8"></div>Realisasi Tepat Waktu</div>
-      <div style="display:flex;align-items:center;gap:5px"><div style="width:20px;height:8px;background:var(--red);border-radius:2px;opacity:0.8"></div>Realisasi Terlambat</div>
-    </div>
-  `;
+    <div style="margin-top:16px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--muted);padding:10px 0;border-top:1px solid var(--border)">
+      <strong style="color:var(--text)">Legenda:</strong>
+      <div style="display:flex;align-items:center;gap:5px">
+        <div style="width:22px;height:10px;background:rgba(59,130,246,0.2);border:2px solid #3b82f6;border-radius:2px"></div>
+        <span>Planning (Rencana)</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:5px">
+        <div style="width:22px;height:10px;background:var(--green);border-radius:2px;opacity:0.85"></div>
+        <span>Realisasi Tepat/Lebih Awal</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:5px">
+        <div style="width:22px;height:10px;background:var(--red);border-radius:2px;opacity:0.85"></div>
+        <span>Realisasi Terlambat</span>
+      </div>
+      ${todayInRange ? `<div style="display:flex;align-items:center;gap:5px">
+        <div style="width:22px;height:10px;background:rgba(59,130,246,0.18);border:1px solid var(--blue);border-radius:2px"></div>
+        <span>Hari Ini (${fmtDate(todayStr)})</span>
+      </div>` : ''}
+      <span style="margin-left:auto;font-size:10px">💡 Hover bar realisasi untuk detail qty</span>
+    </div>`;
 }
 
 // ─── Helper: hitung kumulatif qty dari dailyReports ─────────────
