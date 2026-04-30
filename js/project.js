@@ -560,10 +560,10 @@ function renderGantt() {
         const planStartIdx = diffDays(minDate, it.planStart);
         const planSpan     = it.dur;
 
-        // Pre-compute realisasi indices once per item
-        const planEndIdx   = planStartIdx + planSpan - 1;
-        let realStartIdx   = -1;
-        let realEndIdx     = -1;
+        // Pre-compute realisasi indices untuk item ini
+        const planEndIdx = planStartIdx + planSpan - 1;
+        let realStartIdx = -1;
+        let realEndIdx   = -1;
         if (it.realisasiStart) {
           realStartIdx = diffDays(minDate, it.realisasiStart);
           realEndIdx   = realStartIdx + it.dur - 1;
@@ -573,25 +573,20 @@ function renderGantt() {
         const cells = dates.map((dt, idx) => {
           const tdStyle = 'padding:0;position:relative;height:28px;';
 
-          // Layer 1 – Biru: sel ini masuk rentang rencana
+          // Apakah sel ini masuk rentang rencana?
           const inPlan = idx >= planStartIdx && idx <= planEndIdx;
 
-          // Layer 2 – Realisasi: sel ini masuk rentang realisasi
+          // Apakah sel ini masuk rentang realisasi?
           const inReal = realStartIdx >= 0 && idx >= realStartIdx && idx <= realEndIdx;
 
-          // Apakah sel realisasi ini melebihi planEnd? (terlambat = merah)
+          // Realisasi melewati planEnd → merah
           const isOverdue = inReal && idx > planEndIdx;
 
-          // Rencana: biru transparan dengan border warna segmen
-          const planBg = inPlan
-            ? `background:${HEX[si%6]}35;border-top:2px solid ${HEX[si%6]};border-bottom:2px solid ${HEX[si%6]};${idx===planStartIdx?`border-left:2px solid ${HEX[si%6]};`:''}${idx===planEndIdx?`border-right:2px solid ${HEX[si%6]};`:''}`
-            : '';
-
           const planDiv = inPlan
-            ? `<div style="position:absolute;inset:0;${planBg}"></div>`
+            ? `<div style="position:absolute;inset:0;background:${HEX[si%6]}35;border-top:2px solid ${HEX[si%6]};border-bottom:2px solid ${HEX[si%6]};${idx===planStartIdx?`border-left:2px solid ${HEX[si%6]};`:''}${idx===planEndIdx?`border-right:2px solid ${HEX[si%6]};`:''}"></div>`
             : '';
 
-          // Realisasi: hijau jika dalam rentang rencana, merah jika melewati planEnd
+          // Hijau = realisasi dalam rentang rencana, Merah = realisasi melewati rencana
           const realDiv = inReal
             ? `<div class="gantt-cell-overlay ${isOverdue ? 'gantt-cell-late' : 'gantt-cell-ontime'}"></div>`
             : '';
